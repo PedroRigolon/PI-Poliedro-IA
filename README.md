@@ -6,14 +6,6 @@ Sistema de geração de imagens educacionais com IA para o Sistema Poliedro.
 
 O projeto propõe o desenvolvimento de uma ferramenta educacional multiplataforma (desktop e mobile) que utiliza Inteligência Artificial generativa para criar ilustrações educacionais. O foco inicial são as disciplinas de Física e Química, permitindo que professores gerem rapidamente imagens para provas, listas e materiais didáticos.
 
-### 🎯 Principais Funcionalidades
-
-- Geração de imagens via IA com elementos pré-definidos
-- Edição via prompts em linguagem natural
-- Interface adaptada para desktop e mobile
-- Sistema de autenticação institucional
-- Biblioteca de elementos específicos para Física e Química
-- Histórico e gerenciamento de imagens geradas
 
 ## 🚀 Tecnologias Utilizadas
 
@@ -57,36 +49,9 @@ flutter pub get
 flutter run
 ```
 
-## 📱 Uso
 
-1. Faça login com suas credenciais institucionais:
 
-   - Professores: @sistemapoliedro.com.br
-   - Alunos: @p4ed.com
 
-2. Na tela principal:
-   - Escolha a disciplina (Física/Química)
-   - Selecione a subcategoria
-   - Descreva a imagem que deseja gerar
-   - Use os controles para ajustar a imagem gerada
-
-## 🌟 Funcionalidades Específicas
-
-### Física
-
-- Geração de diagramas de:
-  - Circuitos elétricos
-  - Sistemas mecânicos
-  - Óptica
-  - Termodinâmica
-
-### Química
-
-- Geração de:
-  - Estruturas moleculares
-  - Aparatos experimentais
-  - Diagramas de reações
-  - Representações atômicas
 
 
 
