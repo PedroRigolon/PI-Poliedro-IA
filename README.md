@@ -49,6 +49,20 @@ flutter pub get
 flutter run
 ```
 
+## ! IMPORTANTE
+Para testar o login, utilize as seguintes credenciais: 
+
+Email: 
+```bash
+qualquer@sistemapoliedro.com.br
+```
+
+Senha: 
+```bash
+qualquer senha com 6+ caracteres
+```
+
+
 
 
 
