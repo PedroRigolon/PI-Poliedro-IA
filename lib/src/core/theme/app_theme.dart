@@ -86,6 +86,22 @@ class _AppSpacing {
   final double medium = 16;
   final double large = 24;
   final double extraLarge = 32;
-  // Padding específico para os cards de auth (login/registro)
-  final double authCardPadding = 100; // Aumentei para 64px em cada lado
+
+  /// Retorna o padding horizontal para cards de autenticação baseado no tamanho da tela
+  double getAuthCardPadding(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Para telas desktop (maior que 1024px), usa 25% da largura da tela em cada lado
+    if (screenWidth > 1024) {
+      return screenWidth * 0.25; // 50% da tela será ocupada pelo card
+    }
+
+    // Para tablets (entre 768px e 1024px), usa 20% da largura da tela em cada lado
+    if (screenWidth > 768) {
+      return screenWidth * 0.20; // 60% da tela será ocupada pelo card
+    }
+
+    // Para telas mobile (menor que 768px), usa padding fixo de 16px
+    return 16.0;
+  }
 }

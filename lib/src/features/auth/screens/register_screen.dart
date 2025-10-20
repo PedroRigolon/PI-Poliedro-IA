@@ -31,135 +31,139 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: SingleChildScrollView(
             child: Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: AppTheme.spacing.authCardPadding,
+                horizontal: AppTheme.spacing.getAuthCardPadding(context),
                 vertical: AppTheme.spacing.large,
               ),
-            child: Card(
-              child: Padding(
-                padding: EdgeInsets.all(AppTheme.spacing.large),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Logo
-                    Image.asset('assets/images/logo.png', height: 80),
-                    SizedBox(height: AppTheme.spacing.large),
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(AppTheme.spacing.large),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Logo
+                      Image.asset('assets/images/logo.png', height: 80),
+                      SizedBox(height: AppTheme.spacing.large),
 
-                    Text(
-                      'Email @sistemapoliedro OU @p4ed',
-                      style: AppTheme.typography.subtitle,
-                    ),
-                    SizedBox(height: AppTheme.spacing.medium),
-
-                    // Formulário
-                    Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text('Email', style: AppTheme.typography.label),
-                          SizedBox(height: AppTheme.spacing.small),
-                          TextFormField(
-                            controller: _emailController,
-                            decoration: InputDecoration(
-                              hintText: 'Digite seu email...',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Por favor, digite seu email';
-                              }
-                              if (!value.contains('@sistemapoliedro.com.br') &&
-                                  !value.contains('@p4ed.com')) {
-                                return 'Use seu email institucional';
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: AppTheme.spacing.medium),
-
-                          Text('Senha', style: AppTheme.typography.label),
-                          SizedBox(height: AppTheme.spacing.small),
-                          TextFormField(
-                            controller: _passwordController,
-                            decoration: InputDecoration(
-                              hintText: 'Digite sua senha...',
-                            ),
-                            obscureText: true,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Por favor, digite sua senha';
-                              }
-                              if (value.length < 6) {
-                                return 'A senha deve ter no mínimo 6 caracteres';
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: AppTheme.spacing.medium),
-
-                          Text(
-                            'Confirmar Senha',
-                            style: AppTheme.typography.label,
-                          ),
-                          SizedBox(height: AppTheme.spacing.small),
-                          TextFormField(
-                            controller: _confirmPasswordController,
-                            decoration: InputDecoration(
-                              hintText: 'Repita sua senha...',
-                            ),
-                            obscureText: true,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Por favor, confirme sua senha';
-                              }
-                              if (value != _passwordController.text) {
-                                return 'As senhas não coincidem';
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: AppTheme.spacing.large),
-
-                          Consumer<AuthProvider>(
-                            builder: (context, auth, child) {
-                              if (auth.isLoading) {
-                                return Center(
-                                  child:
-                                      LoadingAnimationWidget.staggeredDotsWave(
-                                        color: AppTheme.colors.primary,
-                                        size: 40,
-                                      ),
-                                );
-                              }
-
-                              return ElevatedButton(
-                                onPressed: _handleRegister,
-                                child: Text('Cadastrar-se'),
-                              );
-                            },
-                          ),
-
-                          SizedBox(height: AppTheme.spacing.medium),
-
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            child: Text(
-                              'Já possui uma conta? Login',
-                              style: TextStyle(color: AppTheme.colors.primary),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        'Email @sistemapoliedro OU @p4ed',
+                        style: AppTheme.typography.subtitle,
                       ),
-                    ),
-                  ],
+                      SizedBox(height: AppTheme.spacing.medium),
+
+                      // Formulário
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text('Email', style: AppTheme.typography.label),
+                            SizedBox(height: AppTheme.spacing.small),
+                            TextFormField(
+                              controller: _emailController,
+                              decoration: InputDecoration(
+                                hintText: 'Digite seu email...',
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Por favor, digite seu email';
+                                }
+                                if (!value.contains(
+                                      '@sistemapoliedro.com.br',
+                                    ) &&
+                                    !value.contains('@p4ed.com')) {
+                                  return 'Use seu email institucional';
+                                }
+                                return null;
+                              },
+                            ),
+                            SizedBox(height: AppTheme.spacing.medium),
+
+                            Text('Senha', style: AppTheme.typography.label),
+                            SizedBox(height: AppTheme.spacing.small),
+                            TextFormField(
+                              controller: _passwordController,
+                              decoration: InputDecoration(
+                                hintText: 'Digite sua senha...',
+                              ),
+                              obscureText: true,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Por favor, digite sua senha';
+                                }
+                                if (value.length < 6) {
+                                  return 'A senha deve ter no mínimo 6 caracteres';
+                                }
+                                return null;
+                              },
+                            ),
+                            SizedBox(height: AppTheme.spacing.medium),
+
+                            Text(
+                              'Confirmar Senha',
+                              style: AppTheme.typography.label,
+                            ),
+                            SizedBox(height: AppTheme.spacing.small),
+                            TextFormField(
+                              controller: _confirmPasswordController,
+                              decoration: InputDecoration(
+                                hintText: 'Repita sua senha...',
+                              ),
+                              obscureText: true,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Por favor, confirme sua senha';
+                                }
+                                if (value != _passwordController.text) {
+                                  return 'As senhas não coincidem';
+                                }
+                                return null;
+                              },
+                            ),
+                            SizedBox(height: AppTheme.spacing.large),
+
+                            Consumer<AuthProvider>(
+                              builder: (context, auth, child) {
+                                if (auth.isLoading) {
+                                  return Center(
+                                    child:
+                                        LoadingAnimationWidget.staggeredDotsWave(
+                                          color: AppTheme.colors.primary,
+                                          size: 40,
+                                        ),
+                                  );
+                                }
+
+                                return ElevatedButton(
+                                  onPressed: _handleRegister,
+                                  child: Text('Cadastrar-se'),
+                                );
+                              },
+                            ),
+
+                            SizedBox(height: AppTheme.spacing.medium),
+
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                              child: Text(
+                                'Já possui uma conta? Login',
+                                style: TextStyle(
+                                  color: AppTheme.colors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    )
     );
   }
 

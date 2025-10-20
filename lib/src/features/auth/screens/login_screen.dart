@@ -30,106 +30,110 @@ class _LoginScreenState extends State<LoginScreen> {
           child: SingleChildScrollView(
             child: Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: AppTheme.spacing.authCardPadding,
+                horizontal: AppTheme.spacing.getAuthCardPadding(context),
                 vertical: AppTheme.spacing.large,
               ),
-            child: Card(
-              child: Padding(
-                padding: EdgeInsets.all(AppTheme.spacing.large),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Logo
-                    Image.asset('assets/images/logo.png', height: 80),
-                    SizedBox(height: AppTheme.spacing.large),
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(AppTheme.spacing.large),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Logo
+                      Image.asset('assets/images/logo.png', height: 80),
+                      SizedBox(height: AppTheme.spacing.large),
 
-                    // Formulário
-                    Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text('Email', style: AppTheme.typography.label),
-                          SizedBox(height: AppTheme.spacing.small),
-                          TextFormField(
-                            controller: _emailController,
-                            decoration: InputDecoration(
-                              hintText: 'Digite seu email...',
+                      // Formulário
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text('Email', style: AppTheme.typography.label),
+                            SizedBox(height: AppTheme.spacing.small),
+                            TextFormField(
+                              controller: _emailController,
+                              decoration: InputDecoration(
+                                hintText: 'Digite seu email...',
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Por favor, digite seu email';
+                                }
+                                if (!value.contains(
+                                      '@sistemapoliedro.com.br',
+                                    ) &&
+                                    !value.contains('@p4ed.com')) {
+                                  return 'Use seu email institucional';
+                                }
+                                return null;
+                              },
                             ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Por favor, digite seu email';
-                              }
-                              if (!value.contains('@sistemapoliedro.com.br') &&
-                                  !value.contains('@p4ed.com')) {
-                                return 'Use seu email institucional';
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: AppTheme.spacing.medium),
+                            SizedBox(height: AppTheme.spacing.medium),
 
-                          Text('Senha', style: AppTheme.typography.label),
-                          SizedBox(height: AppTheme.spacing.small),
-                          TextFormField(
-                            controller: _passwordController,
-                            decoration: InputDecoration(
-                              hintText: 'Digite sua senha...',
+                            Text('Senha', style: AppTheme.typography.label),
+                            SizedBox(height: AppTheme.spacing.small),
+                            TextFormField(
+                              controller: _passwordController,
+                              decoration: InputDecoration(
+                                hintText: 'Digite sua senha...',
+                              ),
+                              obscureText: true,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Por favor, digite sua senha';
+                                }
+                                if (value.length < 6) {
+                                  return 'A senha deve ter no mínimo 6 caracteres';
+                                }
+                                return null;
+                              },
                             ),
-                            obscureText: true,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Por favor, digite sua senha';
-                              }
-                              if (value.length < 6) {
-                                return 'A senha deve ter no mínimo 6 caracteres';
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: AppTheme.spacing.large),
+                            SizedBox(height: AppTheme.spacing.large),
 
-                          Consumer<AuthProvider>(
-                            builder: (context, auth, child) {
-                              if (auth.isLoading) {
-                                return Center(
-                                  child:
-                                      LoadingAnimationWidget.staggeredDotsWave(
-                                        color: AppTheme.colors.primary,
-                                        size: 40,
-                                      ),
+                            Consumer<AuthProvider>(
+                              builder: (context, auth, child) {
+                                if (auth.isLoading) {
+                                  return Center(
+                                    child:
+                                        LoadingAnimationWidget.staggeredDotsWave(
+                                          color: AppTheme.colors.primary,
+                                          size: 40,
+                                        ),
+                                  );
+                                }
+
+                                return ElevatedButton(
+                                  onPressed: _handleLogin,
+                                  child: Text('Login'),
                                 );
-                              }
-
-                              return ElevatedButton(
-                                onPressed: _handleLogin,
-                                child: Text('Login'),
-                              );
-                            },
-                          ),
-
-                          SizedBox(height: AppTheme.spacing.medium),
-
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pushNamed(context, '/register');
-                            },
-                            child: Text(
-                              'Não possui uma conta? Cadastre-se',
-                              style: TextStyle(color: AppTheme.colors.primary),
+                              },
                             ),
-                          ),
-                        ],
+
+                            SizedBox(height: AppTheme.spacing.medium),
+
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pushNamed(context, '/register');
+                              },
+                              child: Text(
+                                'Não possui uma conta? Cadastre-se',
+                                style: TextStyle(
+                                  color: AppTheme.colors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    )
     );
   }
 
