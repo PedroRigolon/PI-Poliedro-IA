@@ -63,6 +63,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppTheme.colors.background,
       appBar: AppBar(
+        backgroundColor: AppTheme.colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         title: Image.asset('assets/images/logo.png', height: 40),
         actions: [
           IconButton(
@@ -226,6 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
             // Body: scrollable list of subjects and their subtopics
             Expanded(
               child: ListView(
+                primary: false,
                 children: [
                   // Grupo Geral
                   _buildMateriaHeaderCollapsible('Geral'),
