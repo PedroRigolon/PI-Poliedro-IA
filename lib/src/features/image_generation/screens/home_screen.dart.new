@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 
-/// Simple grid painter for the empty canvas area.
 class CanvasGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.grey[300]!
+      ..color = Colors.grey[200]!
       ..strokeWidth = 0.5;
 
+    // Desenha linhas verticais
     for (double x = 0; x < size.width; x += 20) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
+
+    // Desenha linhas horizontais
     for (double y = 0; y < size.height; y += 20) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
@@ -32,7 +33,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // -1 means panel closed
+  bool _isLoading = false;
+  final _promptController = TextEditingController();
   int _selectedIndex = -1;
   final double _panelWidth = 360;
 
@@ -44,21 +46,20 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Image.asset('assets/images/logo.png', height: 40),
         actions: [
           IconButton(
-            icon: const Icon(Icons.account_circle),
+            icon: Icon(Icons.account_circle),
             onPressed: _showProfileMenu,
           ),
         ],
       ),
       body: Row(
         children: [
-          // Navigation rail
+          // Menu Lateral
           NavigationRail(
-            // When none selected we still provide a valid index for the widget
-            selectedIndex: _selectedIndex < 0 ? 0 : _selectedIndex,
+            selectedIndex: _selectedIndex < 0 ? null : _selectedIndex,
             onDestinationSelected: (index) {
               setState(() {
                 if (_selectedIndex == index) {
-                  _selectedIndex = -1; // toggle close
+                  _selectedIndex = -1;
                 } else {
                   _selectedIndex = index;
                 }
@@ -67,74 +68,64 @@ class _HomeScreenState extends State<HomeScreen> {
             labelType: NavigationRailLabelType.all,
             destinations: [
               NavigationRailDestination(
-                icon: const Icon(Icons.smart_toy),
-                selectedIcon: Icon(
-                  Icons.smart_toy,
-                  color: AppTheme.colors.primary,
-                ),
-                label: const Text('IA'),
+                icon: Icon(Icons.smart_toy),
+                selectedIcon: Icon(Icons.smart_toy, color: AppTheme.colors.primary),
+                label: Text('IA'),
               ),
               NavigationRailDestination(
-                icon: const Icon(Icons.category),
-                selectedIcon: Icon(
-                  Icons.category,
-                  color: AppTheme.colors.primary,
-                ),
-                label: const Text('Formas'),
+                icon: Icon(Icons.category),
+                selectedIcon: Icon(Icons.category, color: AppTheme.colors.primary),
+                label: Text('Formas'),
               ),
               NavigationRailDestination(
-                icon: const Icon(Icons.settings),
-                selectedIcon: Icon(
-                  Icons.settings,
-                  color: AppTheme.colors.primary,
-                ),
-                label: const Text('Configurações'),
+                icon: Icon(Icons.settings),
+                selectedIcon: Icon(Icons.settings, color: AppTheme.colors.primary),
+                label: Text('Configurações'),
               ),
             ],
           ),
 
-          // Main area: canvas + sliding panel
+          // Área Principal (canvas + painel deslizante)
           Expanded(
             child: Stack(
               children: [
-                // Canvas fills the available body area (below AppBar)
-                Positioned.fill(
-                  child: Container(
+                // Canvas vazio com grid
+                Container(
+                  decoration: BoxDecoration(
                     color: Colors.white,
-                    child: CustomPaint(
-                      painter: CanvasGridPainter(),
-                      child: Container(),
-                    ),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: CustomPaint(
+                    painter: CanvasGridPainter(),
+                    size: Size.infinite,
                   ),
                 ),
 
-                // Backdrop: when panel is open, clicking outside closes it
+                // Backdrop para fechar o painel quando aberto
                 if (_selectedIndex >= 0)
                   Positioned.fill(
                     child: GestureDetector(
                       onTap: () => setState(() => _selectedIndex = -1),
-                      child: Container(color: Colors.transparent),
+                      child: Container(
+                        color: Colors.transparent,
+                      ),
                     ),
                   ),
 
-                // Sliding panel (no shadow/elevation, stretches top->bottom of body)
+                // Painel deslizante
                 AnimatedPositioned(
-                  duration: const Duration(milliseconds: 300),
+                  duration: Duration(milliseconds: 300),
                   curve: Curves.easeOut,
                   left: _selectedIndex >= 0 ? 0 : -_panelWidth,
                   top: 0,
                   bottom: 0,
                   width: _panelWidth,
                   child: Material(
-                    elevation: 0, // remove shadow
+                    elevation: 0,
                     color: AppTheme.colors.white,
-                    child: SafeArea(
-                      top: false,
-                      bottom: false,
-                      child: Padding(
-                        padding: EdgeInsets.all(AppTheme.spacing.medium),
-                        child: _buildPanelContent(),
-                      ),
+                    child: Padding(
+                      padding: EdgeInsets.all(AppTheme.spacing.medium),
+                      child: _buildPanelContent(),
                     ),
                   ),
                 ),
@@ -155,29 +146,27 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'IA',
-                  style: AppTheme.typography.title.copyWith(fontSize: 20),
-                ),
+                Text('IA', style: AppTheme.typography.title.copyWith(fontSize: 20)),
                 IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close),
                   onPressed: () => setState(() => _selectedIndex = -1),
                 ),
               ],
             ),
             SizedBox(height: AppTheme.spacing.medium),
+            Text('Opções de geração',
+                style: AppTheme.typography.subtitle.copyWith(fontSize: 16)),
+            SizedBox(height: AppTheme.spacing.medium),
             DropdownButtonFormField<String>(
               value: 'Estilo Padrão',
-              items: [
-                'Estilo Padrão',
-                'Esboço',
-                'Realista',
-              ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              items: ['Estilo Padrão', 'Esboço', 'Realista']
+                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                  .toList(),
               onChanged: (_) {},
-              decoration: const InputDecoration(labelText: 'Estilo'),
+              decoration: InputDecoration(labelText: 'Estilo'),
             ),
             SizedBox(height: AppTheme.spacing.medium),
-            ElevatedButton(onPressed: () {}, child: const Text('Aplicar')),
+            ElevatedButton(onPressed: () {}, child: Text('Aplicar')),
           ],
         );
 
@@ -188,37 +177,27 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Formas',
-                  style: AppTheme.typography.title.copyWith(fontSize: 20),
-                ),
+                Text('Formas',
+                    style: AppTheme.typography.title.copyWith(fontSize: 20)),
                 IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close),
                   onPressed: () => setState(() => _selectedIndex = -1),
                 ),
               ],
             ),
             SizedBox(height: AppTheme.spacing.medium),
-            Text(
-              'Selecione formas para inserir:',
-              style: AppTheme.typography.paragraph.copyWith(fontSize: 14),
-            ),
+            Text('Selecione formas para inserir:',
+                style: AppTheme.typography.paragraph.copyWith(fontSize: 14)),
             SizedBox(height: AppTheme.spacing.medium),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                ElevatedButton(onPressed: () {}, child: const Text('Resistor')),
-                ElevatedButton(
-                  onPressed: () {},
-                  child: const Text('Capacitor'),
-                ),
-                ElevatedButton(onPressed: () {}, child: const Text('Gerador')),
-                ElevatedButton(onPressed: () {}, child: const Text('Bloco')),
-                ElevatedButton(
-                  onPressed: () {},
-                  child: const Text('Plano Inclinado'),
-                ),
+                ElevatedButton(onPressed: () {}, child: Text('Resistor')),
+                ElevatedButton(onPressed: () {}, child: Text('Capacitor')),
+                ElevatedButton(onPressed: () {}, child: Text('Gerador')),
+                ElevatedButton(onPressed: () {}, child: Text('Bloco')),
+                ElevatedButton(onPressed: () {}, child: Text('Plano Inclinado')),
               ],
             ),
           ],
@@ -231,12 +210,10 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Configurações',
-                  style: AppTheme.typography.title.copyWith(fontSize: 20),
-                ),
+                Text('Configurações',
+                    style: AppTheme.typography.title.copyWith(fontSize: 20)),
                 IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close),
                   onPressed: () => setState(() => _selectedIndex = -1),
                 ),
               ],
@@ -245,18 +222,18 @@ class _HomeScreenState extends State<HomeScreen> {
             SwitchListTile(
               value: true,
               onChanged: (_) {},
-              title: const Text('Preferências de exportação'),
+              title: Text('Preferências de exportação'),
             ),
             SwitchListTile(
               value: false,
               onChanged: (_) {},
-              title: const Text('Salvar histórico automaticamente'),
+              title: Text('Salvar histórico automaticamente'),
             ),
           ],
         );
 
       default:
-        return const SizedBox.shrink();
+        return SizedBox.shrink();
     }
   }
 
@@ -270,17 +247,73 @@ class _HomeScreenState extends State<HomeScreen> {
         0,
       ),
       items: [
-        PopupMenuItem(child: const Text('Configurações'), onTap: () {}),
-        PopupMenuItem(child: const Text('Coleção'), onTap: () {}),
-        PopupMenuItem(child: const Text('Histórico'), onTap: () {}),
         PopupMenuItem(
-          child: const Text('Sair'),
+          child: Text('Configurações'),
+          onTap: () {
+            // TODO: Navegar para configurações
+          },
+        ),
+        PopupMenuItem(
+          child: Text('Coleção'),
+          onTap: () {
+            // TODO: Navegar para coleção de imagens
+          },
+        ),
+        PopupMenuItem(
+          child: Text('Histórico'),
+          onTap: () {
+            // TODO: Navegar para histórico
+          },
+        ),
+        PopupMenuItem(
+          child: Text('Sair'),
           onTap: () async {
             await context.read<AuthProvider>().logout();
-            if (mounted) Navigator.pushReplacementNamed(context, '/login');
+            if (mounted) {
+              Navigator.pushReplacementNamed(context, '/login');
+            }
           },
         ),
       ],
     );
+  }
+
+  Future<void> _handleGenerateImage() async {
+    if (_promptController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Por favor, descreva a imagem que deseja gerar'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // TODO: Implementar integração com a API de IA
+      await Future.delayed(Duration(seconds: 2)); // Simulação
+
+      // TODO: Mostrar imagem gerada
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _promptController.dispose();
+    super.dispose();
   }
 }

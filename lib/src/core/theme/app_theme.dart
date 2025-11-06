@@ -11,7 +11,7 @@ class AppTheme {
       colorScheme: ColorScheme.light(
         primary: colors.primary,
         secondary: colors.secondary,
-        background: colors.background,
+        surface: colors.background,
       ),
       textTheme: _buildTextTheme(),
       inputDecorationTheme: _buildInputDecorationTheme(),
