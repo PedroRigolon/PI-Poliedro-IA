@@ -35,6 +35,28 @@ class _HomeScreenState extends State<HomeScreen> {
   // -1 means panel closed
   int _selectedIndex = -1;
   final double _panelWidth = 360;
+  // Estado de expansão para materias e submaterias
+  final Map<String, bool> _materiaExpanded = {
+    'Geral': true,
+    'Física': true,
+    'Química': true,
+  };
+  final Map<String, bool> _subExpanded = {
+    'Textos': true,
+    'Setas': true,
+    'Mecânica': true,
+    'Óptica': true,
+    'Térmica': true,
+    'Orgânica': true,
+    'Inorgânica': true,
+    'Termoquímica': true,
+  };
+
+  void _toggleMateria(String materia) => setState(
+    () => _materiaExpanded[materia] = !(_materiaExpanded[materia] ?? true),
+  );
+  void _toggleSub(String sub) =>
+      setState(() => _subExpanded[sub] = !(_subExpanded[sub] ?? true));
 
   @override
   Widget build(BuildContext context) {
@@ -182,6 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
 
       case 1: // Formas
+        // Replace simple buttons with a scrollable list of sections (materia -> submateria -> grid of thumbnails)
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -199,27 +222,67 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             SizedBox(height: AppTheme.spacing.medium),
-            Text(
-              'Selecione formas para inserir:',
-              style: AppTheme.typography.paragraph.copyWith(fontSize: 14),
-            ),
-            SizedBox(height: AppTheme.spacing.medium),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ElevatedButton(onPressed: () {}, child: const Text('Resistor')),
-                ElevatedButton(
-                  onPressed: () {},
-                  child: const Text('Capacitor'),
-                ),
-                ElevatedButton(onPressed: () {}, child: const Text('Gerador')),
-                ElevatedButton(onPressed: () {}, child: const Text('Bloco')),
-                ElevatedButton(
-                  onPressed: () {},
-                  child: const Text('Plano Inclinado'),
-                ),
-              ],
+
+            // Body: scrollable list of subjects and their subtopics
+            Expanded(
+              child: ListView(
+                children: [
+                  // Grupo Geral
+                  _buildMateriaHeaderCollapsible('Geral'),
+                  if (_materiaExpanded['Geral'] ?? false) ...[
+                    _buildSubSectionCollapsible(
+                      'Textos',
+                      'assets/forms/geral/textos',
+                      6,
+                    ),
+                    _buildSubSectionCollapsible(
+                      'Setas',
+                      'assets/forms/geral/setas',
+                      6,
+                    ),
+                  ],
+                  const Divider(height: 24),
+                  // Grupo Física
+                  _buildMateriaHeaderCollapsible('Física'),
+                  if (_materiaExpanded['Física'] ?? false) ...[
+                    _buildSubSectionCollapsible(
+                      'Mecânica',
+                      'assets/forms/fisica/mecanica',
+                      6,
+                    ),
+                    _buildSubSectionCollapsible(
+                      'Óptica',
+                      'assets/forms/fisica/optica',
+                      5,
+                    ),
+                    _buildSubSectionCollapsible(
+                      'Térmica',
+                      'assets/forms/fisica/termica',
+                      4,
+                    ),
+                  ],
+                  const Divider(height: 24),
+                  // Grupo Química
+                  _buildMateriaHeaderCollapsible('Química'),
+                  if (_materiaExpanded['Química'] ?? false) ...[
+                    _buildSubSectionCollapsible(
+                      'Orgânica',
+                      'assets/forms/quimica/organica',
+                      5,
+                    ),
+                    _buildSubSectionCollapsible(
+                      'Inorgânica',
+                      'assets/forms/quimica/inorganica',
+                      5,
+                    ),
+                    _buildSubSectionCollapsible(
+                      'Termoquímica',
+                      'assets/forms/quimica/termoquimica',
+                      4,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         );
@@ -258,6 +321,114 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  // Header de matéria com comportamento de expandir/retrair
+  Widget _buildMateriaHeaderCollapsible(String materia) {
+    final expanded = _materiaExpanded[materia] ?? true;
+    return InkWell(
+      onTap: () => _toggleMateria(materia),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: AppTheme.spacing.small),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                materia,
+                style: AppTheme.typography.title.copyWith(fontSize: 16),
+              ),
+            ),
+            Icon(
+              expanded ? Icons.expand_less : Icons.expand_more,
+              size: 20,
+              color: Colors.grey[700],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Submatéria com expandir/retrair + grid de thumbnails
+  Widget _buildSubSectionCollapsible(
+    String submateria,
+    String assetDir,
+    int count,
+  ) {
+    final expanded = _subExpanded[submateria] ?? true;
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppTheme.spacing.small),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => _toggleSub(submateria),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      submateria,
+                      style: AppTheme.typography.paragraph
+                          .copyWith(fontSize: 13)
+                          .copyWith(color: Colors.grey[700]),
+                    ),
+                  ),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                    color: Colors.grey[600],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 180),
+            crossFadeState: expanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: EdgeInsets.only(top: AppTheme.spacing.small),
+              child: GridView.count(
+                crossAxisCount: 6,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: List.generate(count, (i) {
+                  final asset = '$assetDir/shape1.png';
+                  return GestureDetector(
+                    onTap: () {
+                      // TODO: inserir forma no canvas
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.grey[300]!),
+                        color: Colors.grey[50],
+                      ),
+                      padding: const EdgeInsets.all(6.0),
+                      child: Image.asset(
+                        asset,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stack) => Icon(
+                          Icons.crop_square,
+                          size: 20,
+                          color: Colors.grey[400],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            secondChild: const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showProfileMenu() {
