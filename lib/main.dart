@@ -5,6 +5,9 @@ import 'src/features/auth/providers/auth_provider.dart';
 import 'src/features/auth/screens/login_screen.dart';
 import 'src/features/auth/screens/register_screen.dart';
 import 'src/features/image_generation/screens/home_screen.dart';
+import 'src/features/settings/screens/settings_screen.dart';
+import 'src/features/collection/screens/collection_screen.dart';
+import 'src/features/history/screens/history_screen.dart';
 
 void main() {
   runApp(
@@ -28,6 +31,9 @@ class App extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        '/collection': (context) => const CollectionScreen(),
+        '/history': (context) => const HistoryScreen(),
       },
     );
   }
