@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
+import 'dart:ui' show PointerDeviceKind;
 import 'dart:math' as math;
 
 import '../../../core/theme/app_theme.dart';
@@ -35,6 +37,7 @@ class _PlacedShape {
   double size; // lado do quadrado
   double rotation; // em radianos
   bool locked;
+  bool visible;
   String? groupId;
   _PlacedShape({
     required this.asset,
@@ -42,6 +45,7 @@ class _PlacedShape {
     required this.size,
     double? rotation,
     this.locked = false,
+    this.visible = true,
     this.groupId,
   }) : rotation = rotation ?? 0;
 
@@ -51,6 +55,7 @@ class _PlacedShape {
     double? size,
     double? rotation,
     bool? locked,
+    bool? visible,
     String? groupId,
   }) => _PlacedShape(
         asset: asset ?? this.asset,
@@ -58,6 +63,7 @@ class _PlacedShape {
         size: size ?? this.size,
         rotation: rotation ?? this.rotation,
         locked: locked ?? this.locked,
+        visible: visible ?? this.visible,
         groupId: groupId ?? this.groupId,
       );
 }
@@ -115,6 +121,15 @@ class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _canvasFocusNode = FocusNode();
   bool _interactingWithHandle = false;
   List<_PlacedShape>? _clipboard;
+  // Zoom & Pan
+  double _zoom = 1.0;
+  Offset _pan = Offset.zero;
+  static const double _minZoom = 0.25;
+  static const double _maxZoom = 4.0;
+  bool _isPanning = false;
+  bool _isMiddlePanning = false;
+  Offset? _lastMiddlePanLocal;
+  static const double _scrollPanFactor = 2.5; // velocidade do pan via scroll
   // Marquee selection
   bool _isMarquee = false;
   Offset? _marqueeStart;
@@ -143,6 +158,34 @@ class _HomeScreenState extends State<HomeScreen> {
   );
   void _toggleSub(String sub) =>
       setState(() => _subExpanded[sub] = !(_subExpanded[sub] ?? true));
+
+  bool _isCtrlPressed() {
+    final keysH = HardwareKeyboard.instance.logicalKeysPressed;
+    if (keysH.contains(LogicalKeyboardKey.controlLeft) ||
+        keysH.contains(LogicalKeyboardKey.controlRight) ||
+        keysH.contains(LogicalKeyboardKey.control) ||
+        keysH.contains(LogicalKeyboardKey.metaLeft) ||
+        keysH.contains(LogicalKeyboardKey.metaRight)) {
+      return true;
+    }
+    final keysR = RawKeyboard.instance.keysPressed;
+    return keysR.contains(LogicalKeyboardKey.controlLeft) ||
+        keysR.contains(LogicalKeyboardKey.controlRight) ||
+        keysR.contains(LogicalKeyboardKey.control) ||
+        keysR.contains(LogicalKeyboardKey.metaLeft) ||
+        keysR.contains(LogicalKeyboardKey.metaRight);
+  }
+
+  bool _isShiftPressed() {
+    final keysH = HardwareKeyboard.instance.logicalKeysPressed;
+    if (keysH.contains(LogicalKeyboardKey.shiftLeft) ||
+        keysH.contains(LogicalKeyboardKey.shiftRight)) {
+      return true;
+    }
+    final keysR = RawKeyboard.instance.keysPressed;
+    return keysR.contains(LogicalKeyboardKey.shiftLeft) ||
+        keysR.contains(LogicalKeyboardKey.shiftRight);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -193,6 +236,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: AppTheme.colors.primary,
                 ),
                 label: const Text('Formas'),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.layers_outlined),
+                selectedIcon: Icon(
+                  Icons.layers,
+                  color: AppTheme.colors.primary,
+                ),
+                label: const Text('Camadas'),
               ),
               NavigationRailDestination(
                 icon: const Icon(Icons.settings),
@@ -281,346 +332,168 @@ class _HomeScreenState extends State<HomeScreen> {
                         focusNode: _canvasFocusNode,
                         autofocus: true,
                         child: DragTarget<String>(
-                      onAcceptWithDetails: (details) {
-                        final renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-                        if (renderBox != null) {
-                          final local = renderBox.globalToLocal(details.offset);
-                          _addShape(details.data, local - Offset(_shapeSize / 2, _shapeSize / 2));
-                        } else {
-                          _addShape(details.data, const Offset(120, 120));
-                        }
-                      },
-                      builder: (context, candidates, rejects) {
+                          onAcceptWithDetails: (details) {
+                            final renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+                            if (renderBox != null) {
+                              final localWidget = renderBox.globalToLocal(details.offset);
+                              final canvasLocal = _widgetToCanvas(localWidget);
+                              _addShape(details.data, canvasLocal - Offset(_shapeSize / 2, _shapeSize / 2));
+                            } else {
+                              _addShape(details.data, const Offset(120, 120));
+                            }
+                          },
+                          builder: (context, candidates, rejects) {
                             return RepaintBoundary(
-                          key: _canvasKey,
-                              child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                                onTapDown: (_) {
-                              setState(() => _selectedShapeIndex = -1);
-                                  _selected.clear();
-                              _canvasFocusNode.requestFocus();
-                            },
-                                onPanStart: (details) {
-                                  // Inicia retângulo de seleção se começou em área vazia
-                                  final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-                                  if (box != null) {
-                                    setState(() {
-                                      _isMarquee = true;
-                                      _marqueeStart = box.globalToLocal(details.globalPosition);
-                                      _marqueeRect = Rect.fromLTWH(_marqueeStart!.dx, _marqueeStart!.dy, 0, 0);
-                                    });
-                                  }
-                                },
-                                onPanUpdate: (details) {
-                                  if (_isMarquee) {
+                              key: _canvasKey,
+                              child: MouseRegion(
+                                cursor: (_isMiddlePanning || _isPanning)
+                                    ? SystemMouseCursors.grabbing
+                                    : SystemMouseCursors.basic,
+                                child: Listener(
+                                onPointerSignal: (event) {
+                                  if (event is PointerScrollEvent) {
+                                    final ctrl = _isCtrlPressed();
+                                    final shift = _isShiftPressed();
                                     final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-                                    if (box != null && _marqueeStart != null) {
-                                      final current = box.globalToLocal(details.globalPosition);
+                                    if (box == null) return;
+                                    final local = box.globalToLocal(event.position);
+                                    if (shift) {
+                                      // Shift + Scroll: pan horizontal
+                                      final dx = event.scrollDelta.dx != 0 ? event.scrollDelta.dx : event.scrollDelta.dy;
                                       setState(() {
-                                        _marqueeRect = Rect.fromPoints(_marqueeStart!, current);
+                                        _pan += Offset(-dx * _scrollPanFactor, 0);
                                       });
+                                    } else if (ctrl) {
+                                      // Ctrl + Scroll: pan vertical
+                                      setState(() {
+                                        _pan += Offset(0, -event.scrollDelta.dy * _scrollPanFactor);
+                                      });
+                                    } else {
+                                      // Scroll: zoom por paradas discretas no ponto do cursor
+                                      final zoomIn = event.scrollDelta.dy < 0;
+                                      _zoomToNearestStep(zoomIn, widgetFocal: local);
                                     }
                                   }
                                 },
-                                onPanEnd: (_) {
-                                  if (_isMarquee) {
+                                onPointerDown: (event) {
+                                  // Botão do meio do mouse para pan estilo Figma
+                                  if (event.kind == PointerDeviceKind.mouse && (event.buttons & 0x04) != 0) {
                                     setState(() {
-                                      _applyMarqueeSelection();
-                                      _isMarquee = false;
-                                      _marqueeStart = null;
-                                      _marqueeRect = null;
+                                      _isMiddlePanning = true;
+                                      _lastMiddlePanLocal = event.localPosition;
                                     });
                                   }
                                 },
-                            child: Container(
-                              color: Colors.white,
-                              child: CustomPaint(
-                                painter: _showGrid ? CanvasGridPainter() : null,
-                                child: Container(),
+                                onPointerMove: (event) {
+                                  if (_isMiddlePanning && event.kind == PointerDeviceKind.mouse) {
+                                    final last = _lastMiddlePanLocal;
+                                    if (last != null) {
+                                      final delta = event.localPosition - last;
+                                      setState(() {
+                                        _pan += delta;
+                                      });
+                                      _lastMiddlePanLocal = event.localPosition;
+                                    }
+                                  }
+                                },
+                                onPointerUp: (event) {
+                                  if (_isMiddlePanning && event.kind == PointerDeviceKind.mouse) {
+                                    setState(() {
+                                      _isMiddlePanning = false;
+                                      _lastMiddlePanLocal = null;
+                                    });
+                                  }
+                                },
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTapDown: (_) {
+                                    setState(() => _selectedShapeIndex = -1);
+                                    _selected.clear();
+                                    _canvasFocusNode.requestFocus();
+                                  },
+                                  onPanStart: (details) {
+                                    final keys = HardwareKeyboard.instance.logicalKeysPressed;
+                                    final space = keys.contains(LogicalKeyboardKey.space);
+                                    if (space) {
+                                      setState(() { _isPanning = true; });
+                                      return;
+                                    }
+                                    // Inicia retângulo de seleção (coords canvas)
+                                    setState(() {
+                                      _isMarquee = true;
+                                      final start = _globalToCanvas(details.globalPosition);
+                                      _marqueeStart = start;
+                                      _marqueeRect = Rect.fromLTWH(start.dx, start.dy, 0, 0);
+                                    });
+                                  },
+                                  onPanUpdate: (details) {
+                                    if (_isPanning) {
+                                      setState(() { _pan += details.delta; });
+                                      return;
+                                    }
+                                    if (_isMarquee && _marqueeStart != null) {
+                                      final current = _globalToCanvas(details.globalPosition);
+                                      setState(() { _marqueeRect = Rect.fromPoints(_marqueeStart!, current); });
+                                    }
+                                  },
+                                  onPanEnd: (_) {
+                                    if (_isPanning) {
+                                      setState(() { _isPanning = false; });
+                                      return;
+                                    }
+                                    if (_isMarquee) {
+                                      setState(() {
+                                        _applyMarqueeSelection();
+                                        _isMarquee = false;
+                                        _marqueeStart = null;
+                                        _marqueeRect = null;
+                                      });
+                                    }
+                                  },
+                                  child: ClipRect(
+                                    child: Stack(
+                                      children: [
+                                        Transform(
+                                          transform: Matrix4.identity()
+                                            ..translate(_pan.dx, _pan.dy)
+                                            ..scale(_zoom, _zoom),
+                                          alignment: Alignment.topLeft,
+                                          child: Stack(
+                                            children: [
+                                              Positioned.fill(
+                                                child: Container(
+                                                  color: Colors.white,
+                                                  child: CustomPaint(
+                                                    painter: _showGrid ? CanvasGridPainter() : null,
+                                                  ),
+                                                ),
+                                              ),
+                                              ..._buildShapesContent(),
+
+                                              // Marquee overlay movido para fora se necessário
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        );
-                      },
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
                   ),
                 ),
 
-                // Shapes colocadas no canvas (arrastáveis, selecionáveis, redimensionáveis, rotacionáveis)
-                ..._shapes.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final s = entry.value;
-                  final isSelected = _selected.contains(index) || index == _selectedShapeIndex;
-                  final handleSize = 16.0;
-                  final outerPad = handleSize + 12.0; // área extra para desenhar e captar os handles fora do retângulo
-                  return Positioned(
-                    left: s.position.dx - outerPad,
-                    top: s.position.dy - outerPad,
-                    width: s.size + outerPad * 2,
-                    height: s.size + outerPad * 2,
-                    child: IgnorePointer(
-                      ignoring: _selectedIndex >= 0,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTap: () {
-                          if (_interactingWithHandle) return;
-                          final keys = HardwareKeyboard.instance.logicalKeysPressed;
-                          final ctrl = keys.contains(LogicalKeyboardKey.controlLeft) || keys.contains(LogicalKeyboardKey.controlRight) || keys.contains(LogicalKeyboardKey.metaLeft) || keys.contains(LogicalKeyboardKey.metaRight);
-                          setState(() {
-                            if (ctrl) {
-                              if (_selected.contains(index)) {
-                                _selected.remove(index);
-                              } else {
-                                _selected.add(index);
-                              }
-                              _selectedShapeIndex = _selected.isNotEmpty ? _selected.last : -1;
-                            } else {
-                              _selected.clear();
-                              // Se o shape fizer parte de um grupo, seleciona todo o grupo
-                              if (s.groupId != null) {
-                                for (int i = 0; i < _shapes.length; i++) {
-                                  if (_shapes[i].groupId == s.groupId) {
-                                    _selected.add(i);
-                                  }
-                                }
-                                _selectedShapeIndex = index;
-                              } else {
-                                _selected.add(index);
-                                _selectedShapeIndex = index;
-                              }
-                            }
-                          });
-                          _canvasFocusNode.requestFocus();
-                        },
-                        onPanStart: (_) {
-                          if (_interactingWithHandle) return;
-                          // Trazer para frente
-                          setState(() {
-                            final moved = _shapes.removeAt(index);
-                            _shapes.add(moved);
-                            final newIndex = _shapes.length - 1;
-                            if (_selected.contains(index)) {
-                              _selected.remove(index);
-                              _selected.add(newIndex);
-                            } else {
-                              _selected.clear();
-                              _selected.add(newIndex);
-                            }
-                            _selectedShapeIndex = newIndex; // agora último
-                          });
-                        },
-                        onPanUpdate: (details) {
-                          if (_interactingWithHandle) return;
-                          if (_selected.contains(index)) {
-                            setState(() {
-                              // mover todas as selecionadas pelo mesmo delta
-                              for (final sel in _selected) {
-                                final shp = _shapes[sel];
-                                if (shp.locked) continue;
-                                shp.position += details.delta;
-                                final renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-                                if (renderBox != null) {
-                                  final sizeCanvas = renderBox.size;
-                                  final maxX = sizeCanvas.width - shp.size;
-                                  final maxY = sizeCanvas.height - shp.size;
-                                  shp.position = Offset(
-                                    shp.position.dx.clamp(0.0, maxX),
-                                    shp.position.dy.clamp(0.0, maxY),
-                                  );
-                                }
-                              }
-                            });
-                          }
-                        },
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            // Conteúdo rotacionado (no retângulo original, deslocado pelo outerPad)
-                            Positioned(
-                              left: outerPad,
-                              top: outerPad,
-                              width: s.size,
-                              height: s.size,
-                              child: Transform.rotate(
-                                angle: s.rotation,
-                                child: Container(
-                                  decoration: isSelected
-                                      ? BoxDecoration(
-                                          border: Border.all(
-                                            color: AppTheme.colors.primary,
-                                            width: 1.2,
-                                          ),
-                                          borderRadius: BorderRadius.circular(4),
-                                        )
-                                      : null,
-                                  padding: EdgeInsets.all(isSelected ? 2 : 0),
-                                  child: Image.asset(
-                                    s.asset,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stack) => Icon(
-                                      Icons.crop_square,
-                                      size: s.size * 0.6,
-                                      color: Colors.grey[400],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (isSelected) ...[
-                              // Botão remover (canto superior direito, FORA do retângulo)
-                              Positioned(
-                                top: outerPad - (handleSize + 10),
-                                right: outerPad - (handleSize / 2),
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTapDown: (_) => _interactingWithHandle = true,
-                                  onTapCancel: () => _interactingWithHandle = false,
-                                  onTapUp: (_) => _interactingWithHandle = false,
-                                  onTap: () {
-                                    setState(() {
-                                      // remove todos selecionados
-                                      final toRemove = _selected.isNotEmpty ? _selected.toList() : [index];
-                                      toRemove.sort((a,b)=>b.compareTo(a));
-                                      for (final i in toRemove) {
-                                        _shapes.removeAt(i);
-                                      }
-                                      _selected.clear();
-                                      _selectedShapeIndex = -1;
-                                    });
-                                  },
-                                  child: Container(
-                                    width: handleSize + 10,
-                                    height: handleSize + 10,
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: const Icon(Icons.close, size: 14, color: Colors.white),
-                                  ),
-                                ),
-                              ),
-                              // Handle de rotação (canto superior esquerdo, FORA do retângulo)
-                              Positioned(
-                                top: outerPad - (handleSize + 12),
-                                left: outerPad - (handleSize / 2),
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onPanDown: (_) => _interactingWithHandle = true,
-                                  onPanCancel: () => _interactingWithHandle = false,
-                                  onPanEnd: (_) => _interactingWithHandle = false,
-                                  onPanUpdate: (details) {
-                                    setState(() {
-                                      final center = s.position + Offset(s.size / 2, s.size / 2);
-                                      final globalPos = details.globalPosition;
-                                      final renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-                                      if (renderBox != null) {
-                                        final local = renderBox.globalToLocal(globalPos);
-                                        final vector = local - center;
-                                        s.rotation = math.atan2(vector.dy, vector.dx);
-                                      }
-                                    });
-                                  },
-                                  child: Container(
-                                    width: handleSize + 10,
-                                    height: handleSize + 10,
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.colors.primary,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: const Icon(Icons.rotate_right, size: 14, color: Colors.white),
-                                  ),
-                                ),
-                              ),
-                              // Handle de resize (canto inferior direito, FORA do retângulo)
-                              Positioned(
-                                bottom: outerPad - (handleSize / 2),
-                                right: outerPad - (handleSize / 2),
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onPanDown: (_) => _interactingWithHandle = true,
-                                  onPanCancel: () => _interactingWithHandle = false,
-                                  onPanEnd: (_) => _interactingWithHandle = false,
-                                  onPanUpdate: (details) {
-                                    setState(() {
-                                      final keys = HardwareKeyboard.instance.logicalKeysPressed;
-                                      final keepProportion = keys.contains(LogicalKeyboardKey.shiftLeft) || keys.contains(LogicalKeyboardKey.shiftRight);
-                                      if (_selected.length <= 1) {
-                                        // Para SHIFT, consideramos o maior deslocamento para manter efeito "uniforme"
-                                        final delta = keepProportion
-                                            ? (details.delta.dx.abs() >= details.delta.dy.abs() ? details.delta.dx : details.delta.dy)
-                                            : details.delta.dx;
-                                        double newSize = s.size + delta;
-                                        newSize = newSize.clamp(24.0, 320.0);
-                                        final renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-                                        if (renderBox != null) {
-                                          final sizeCanvas = renderBox.size;
-                                          if (s.position.dx + newSize > sizeCanvas.width) {
-                                            newSize = sizeCanvas.width - s.position.dx;
-                                          }
-                                          if (s.position.dy + newSize > sizeCanvas.height) {
-                                            newSize = sizeCanvas.height - s.position.dy;
-                                          }
-                                        }
-                                        // Snap opcional quando Shift: múltiplos de 8 px
-                                        if (keepProportion) {
-                                          newSize = (newSize / 8).round() * 8;
-                                        }
-                                        s.size = newSize;
-                                      } else {
-                                        // Resize em grupo: escala uniforme em torno do centro do bounding box
-                                        final bounds = _selectionBounds();
-                                        if (bounds == null) return;
-                                        final anchor = bounds.topLeft;
-                                        final cur = bounds.bottomRight;
-                                        final newBR = cur + details.delta;
-                                        final newW = (newBR.dx - anchor.dx).clamp(24.0, double.infinity);
-                                        final newH = (newBR.dy - anchor.dy).clamp(24.0, double.infinity);
-                                        final sx = newW / bounds.width;
-                                        final sy = newH / bounds.height;
-                                        final scale = keepProportion ? math.min(sx, sy) : math.min(sx, sy); // shapes quadrados => escala uniforme
-                                        final center = bounds.center;
-                                        for (final idx in _selected) {
-                                          final shp = _shapes[idx];
-                                          if (shp.locked) continue;
-                                          final rel = shp.position + Offset(shp.size/2, shp.size/2) - center;
-                                          final relScaled = rel * scale;
-                                          shp.size = (shp.size * scale).clamp(16.0, 640.0);
-                                          shp.position = center + relScaled - Offset(shp.size/2, shp.size/2);
-                                        }
-                                      }
-                                    });
-                                  },
-                                  child: Container(
-                                    width: handleSize + 10,
-                                    height: handleSize + 10,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      border: Border.all(color: AppTheme.colors.primary, width: 1.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: const Icon(Icons.open_in_full, size: 14, color: Colors.black87),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-
-                // Marquee overlay
+                // Marquee overlay (convertida para tela)
                 if (_isMarquee && _marqueeRect != null)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: CustomPaint(
-                        painter: _MarqueePainter(_marqueeRect!),
+                        painter: _MarqueePainter(_canvasRectToScreen(_marqueeRect!)),
                       ),
                     ),
                   ),
@@ -628,6 +501,58 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Toolbar flutuante básica para seleção múltipla
                 if (_selected.isNotEmpty)
                   ..._buildSelectionToolbar(),
+
+                // Controles de zoom (canto inferior direito)
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: Material(
+                    elevation: 2,
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Diminuir zoom',
+                            icon: const Icon(Icons.remove, size: 18),
+                            onPressed: () => _zoomStep(false),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: Text('${(_zoom * 100).round()}%'),
+                          ),
+                          IconButton(
+                            tooltip: 'Aumentar zoom',
+                            icon: const Icon(Icons.add, size: 18),
+                            onPressed: () => _zoomStep(true),
+                          ),
+                          const SizedBox(width: 6),
+                          TextButton(
+                            onPressed: _fitToContent,
+                            child: const Text('Ajustar'),
+                          ),
+                          const SizedBox(width: 4),
+                          TextButton(
+                            onPressed: _resetZoom100,
+                            child: const Text('100%'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
 
                 // Backdrop: when panel is open, clicking outside closes it
                 if (_selectedIndex >= 0)
@@ -665,6 +590,93 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  // ======= Controles de Zoom =======
+  void _zoomTo(double targetZoom, {Offset? focalInWidget}) {
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final focal = focalInWidget ?? (box.size.center(Offset.zero));
+    _zoomAt(focal, targetZoom / _zoom);
+  }
+
+  static const List<double> _zoomStops = [
+    0.25, 0.33, 0.5, 0.66, 0.75, 0.8, 0.9, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0,
+  ];
+
+  void _zoomToNearestStep(bool zoomIn, {Offset? widgetFocal}) {
+    const eps = 1e-6;
+    double current = _zoom;
+    // Encontra stop alvo
+    double? target;
+    if (zoomIn) {
+      for (final z in _zoomStops) {
+        if (z > current + eps) { target = z; break; }
+      }
+      target ??= _zoomStops.last;
+    } else {
+      for (int i = _zoomStops.length - 1; i >= 0; i--) {
+        final z = _zoomStops[i];
+        if (z < current - eps) { target = z; break; }
+      }
+      target ??= _zoomStops.first;
+    }
+  _zoomTo(target, focalInWidget: widgetFocal);
+  }
+
+  void _zoomStep(bool zoomIn) {
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final center = box.size.center(Offset.zero);
+    _zoomToNearestStep(zoomIn, widgetFocal: center);
+  }
+
+  void _resetZoom100() {
+    _zoomTo(1.0);
+  }
+
+  void _fitToContent() {
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final viewportSize = box.size;
+    if (_shapes.where((s) => s.visible).isEmpty) {
+      // Sem conteúdo: volta para 100% e origem
+      setState(() {
+        _zoom = 1.0;
+        _pan = Offset.zero;
+      });
+      return;
+    }
+
+    // Calcula bounds do conteúdo visível
+    double minX = double.infinity, minY = double.infinity;
+    double maxX = -double.infinity, maxY = -double.infinity;
+    for (final s in _shapes.where((s) => s.visible)) {
+      minX = math.min(minX, s.position.dx);
+      minY = math.min(minY, s.position.dy);
+      maxX = math.max(maxX, s.position.dx + s.size);
+      maxY = math.max(maxY, s.position.dy + s.size);
+    }
+    final content = Rect.fromLTRB(minX, minY, maxX, maxY);
+    if (content.width <= 0 || content.height <= 0) {
+      _resetZoom100();
+      return;
+    }
+
+    const padding = 32.0; // padding em tela ao redor do conteúdo
+    final scaleX = (viewportSize.width - padding * 2) / content.width;
+    final scaleY = (viewportSize.height - padding * 2) / content.height;
+    final targetZoom = scaleX.isFinite && scaleY.isFinite
+        ? math.min(scaleX, scaleY).clamp(_minZoom, _maxZoom)
+        : 1.0;
+
+    // Centraliza o conteúdo na viewport
+    final contentCenter = content.center;
+    setState(() {
+      _zoom = targetZoom;
+      final viewportCenter = viewportSize.center(Offset.zero);
+      _pan = viewportCenter - contentCenter * _zoom;
+    });
   }
 
   Widget _buildPanelContent() {
@@ -787,7 +799,31 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         );
 
-      case 2: // Configurações
+      case 2: // Camadas
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Camadas',
+                  style: AppTheme.typography.title.copyWith(fontSize: 20),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() => _selectedIndex = -1),
+                ),
+              ],
+            ),
+            SizedBox(height: AppTheme.spacing.medium),
+            Expanded(
+              child: _buildLayersPanel(),
+            ),
+          ],
+        );
+
+      case 3: // Configurações
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -822,6 +858,110 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildLayersPanel() {
+    // Exibir topo da pilha no topo da lista → usar lista reversa
+    final reversed = _shapes.reversed.toList(growable: false);
+    return ReorderableListView.builder(
+      buildDefaultDragHandles: true,
+      itemCount: reversed.length,
+      onReorder: (oldIndex, newIndex) {
+        setState(() {
+          // Ajuste padrão do ReorderableListView
+          if (newIndex > oldIndex) newIndex -= 1;
+          final rev = _shapes.reversed.toList();
+          final item = rev.removeAt(oldIndex);
+          rev.insert(newIndex, item);
+          final newShapes = rev.reversed.toList();
+
+          // Preserva seleção por identidade
+          final selectedObjs = _selected.map((i) => _shapes[i]).toSet();
+          _shapes
+            ..clear()
+            ..addAll(newShapes);
+          _selected
+            ..clear()
+            ..addAll([
+              for (int i = 0; i < _shapes.length; i++)
+                if (selectedObjs.contains(_shapes[i])) i,
+            ]);
+          _selectedShapeIndex = _selected.isNotEmpty ? _selected.last : -1;
+        });
+      },
+      itemBuilder: (context, i) {
+        final s = reversed[i];
+        final index = _shapes.indexOf(s); // índice real
+        final isSel = _selected.contains(index) || index == _selectedShapeIndex;
+        final name = s.asset.split('/').last;
+        return ListTile(
+          key: ValueKey('layer_$index'),
+          selected: isSel,
+          selectedTileColor: Colors.blue.withValues(alpha: 0.06),
+          leading: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Image.asset(
+              s.asset,
+              fit: BoxFit.contain,
+              errorBuilder: (c, e, st) => Icon(Icons.crop_square, size: 18, color: Colors.grey[400]),
+            ),
+          ),
+          title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: s.groupId != null ? const Text('Grupo') : null,
+          trailing: Wrap(spacing: 8, children: [
+            IconButton(
+              tooltip: s.visible ? 'Ocultar' : 'Exibir',
+              icon: Icon(s.visible ? Icons.visibility : Icons.visibility_off, size: 20),
+              onPressed: () {
+                setState(() {
+                  s.visible = !s.visible;
+                  if (!s.visible) {
+                    // Se estava selecionado, remover da seleção
+                    _selected.remove(index);
+                    if (_selectedShapeIndex == index) {
+                      _selectedShapeIndex = -1;
+                    }
+                  }
+                });
+              },
+            ),
+            IconButton(
+              tooltip: s.locked ? 'Desbloquear' : 'Bloquear',
+              icon: Icon(s.locked ? Icons.lock : Icons.lock_open, size: 20),
+              onPressed: () {
+                setState(() {
+                  s.locked = !s.locked;
+                });
+              },
+            ),
+            const Icon(Icons.drag_indicator, size: 20, color: Colors.grey),
+          ]),
+          onTap: () {
+            setState(() {
+              _selected.clear();
+              if (s.groupId != null) {
+                for (int j = 0; j < _shapes.length; j++) {
+                  if (_shapes[j].groupId == s.groupId) {
+                    _selected.add(j);
+                  }
+                }
+              } else {
+                _selected.add(index);
+              }
+              _selectedShapeIndex = index;
+              _selected.removeWhere((i) => !_shapes[i].visible);
+              if (_selected.isEmpty) _selectedShapeIndex = -1;
+            });
+          },
+        );
+      },
+    );
   }
 
   // Header de matéria com comportamento de expandir/retrair
@@ -1000,8 +1140,32 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Widget> _buildSelectionToolbar() {
     final bounds = _selectionBounds();
     if (bounds == null) return [];
-  final toolbarY = (bounds.top - 84).clamp(0.0, double.infinity);
-    final toolbarX = (bounds.center.dx - 120).clamp(0.0, double.infinity);
+    final topLeftScreen = _pan + Offset(bounds.left, bounds.top) * _zoom;
+    final centerScreen = _pan + bounds.center * _zoom;
+    final toolbarY = (topLeftScreen.dy - 84).clamp(0.0, double.infinity);
+    final toolbarX = (centerScreen.dx - 120).clamp(0.0, double.infinity);
+
+  // Estado de bloqueio da seleção
+  final hasSel = _selected.isNotEmpty;
+  final allLocked = hasSel && _selected.every((i) => _shapes[i].locked);
+  final anyLocked = hasSel && _selected.any((i) => _shapes[i].locked);
+  final mixed = hasSel && anyLocked && !allLocked;
+  final lockIcon = allLocked
+    ? Icons.lock
+    : mixed
+      ? Icons.lock_outline
+      : Icons.lock_open;
+  final lockColor = allLocked
+    ? Colors.redAccent
+    : mixed
+      ? Colors.amber[800]
+      : Colors.black87;
+  final lockTooltip = allLocked
+    ? 'Desbloquear seleção'
+    : mixed
+      ? 'Definir bloqueio (misto)'
+      : 'Bloquear seleção';
+
     return [
       Positioned(
         left: toolbarX,
@@ -1025,10 +1189,28 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: _duplicateSelected,
                 ),
                 IconButton(
-                  tooltip: 'Bloquear/Desbloquear',
-                  icon: const Icon(Icons.lock_open, size: 18),
+                  tooltip: lockTooltip,
+                  icon: Icon(lockIcon, size: 18, color: lockColor),
                   onPressed: _toggleLockSelected,
                 ),
+                if (hasSel)
+                  Container(
+                    margin: const EdgeInsets.only(left: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Text(
+                      allLocked
+                          ? 'Bloqueado'
+                          : mixed
+                              ? 'Misto'
+                              : 'Desbloqueado',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
                 const VerticalDivider(width: 8),
                 IconButton(
                   tooltip: 'Trazer para frente',
@@ -1046,6 +1228,27 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     ];
+  }
+
+  // Helpers de transformação de coordenadas e zoom
+  Offset _widgetToCanvas(Offset widgetPoint) {
+    return (widgetPoint - _pan) / _zoom;
+  }
+
+  Offset _globalToCanvas(Offset globalPoint) {
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return globalPoint;
+    final local = box.globalToLocal(globalPoint);
+    return _widgetToCanvas(local);
+  }
+
+  void _zoomAt(Offset widgetFocal, double factor) {
+    setState(() {
+      final newZoom = (_zoom * factor).clamp(_minZoom, _maxZoom);
+      final canvasPoint = (widgetFocal - _pan) / _zoom;
+      _zoom = newZoom;
+      _pan = widgetFocal - canvasPoint * _zoom;
+    });
   }
 
   void _duplicateSelected() {
@@ -1067,9 +1270,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _toggleLockSelected() {
     if (_selected.isEmpty) return;
     setState(() {
-      final lock = !_shapes[_selected.first].locked;
+      final allLocked = _selected.every((i) => _shapes[i].locked);
+      final target = !allLocked; // se todos bloqueados, desbloqueia; caso contrário, bloqueia todos
       for (final i in _selected) {
-        _shapes[i].locked = lock;
+        _shapes[i].locked = target;
       }
     });
   }
@@ -1172,6 +1376,270 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Função de alinhamento removida da toolbar (mantida anteriormente); poderá ser reintroduzida em um painel dedicado.
+
+  Rect _canvasRectToScreen(Rect r) {
+    final tl = _pan + Offset(r.left, r.top) * _zoom;
+    final br = _pan + Offset(r.right, r.bottom) * _zoom;
+    return Rect.fromPoints(tl, br);
+  }
+
+  List<Widget> _buildShapesContent() {
+    return _shapes.asMap().entries.where((e) => e.value.visible).map((entry) {
+      final index = entry.key;
+      final s = entry.value;
+      final isSelected = _selected.contains(index) || index == _selectedShapeIndex;
+      const handleSize = 16.0;
+      const outerPad = handleSize + 12.0;
+      return Positioned(
+        left: s.position.dx - outerPad,
+        top: s.position.dy - outerPad,
+        width: s.size + outerPad * 2,
+        height: s.size + outerPad * 2,
+        child: IgnorePointer(
+          ignoring: _selectedIndex >= 0,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              if (_interactingWithHandle) return;
+              final keys = HardwareKeyboard.instance.logicalKeysPressed;
+              final ctrl = keys.contains(LogicalKeyboardKey.controlLeft) || keys.contains(LogicalKeyboardKey.controlRight) || keys.contains(LogicalKeyboardKey.metaLeft) || keys.contains(LogicalKeyboardKey.metaRight);
+              setState(() {
+                if (ctrl) {
+                  if (_selected.contains(index)) {
+                    _selected.remove(index);
+                  } else {
+                    _selected.add(index);
+                  }
+                  _selectedShapeIndex = _selected.isNotEmpty ? _selected.last : -1;
+                } else {
+                  _selected.clear();
+                  if (s.groupId != null) {
+                    for (int i = 0; i < _shapes.length; i++) {
+                      if (_shapes[i].groupId == s.groupId) {
+                        _selected.add(i);
+                      }
+                    }
+                    _selectedShapeIndex = index;
+                  } else {
+                    _selected.add(index);
+                    _selectedShapeIndex = index;
+                  }
+                }
+              });
+              _canvasFocusNode.requestFocus();
+            },
+            onPanStart: (_) {
+              if (_interactingWithHandle) return;
+              setState(() {
+                final moved = _shapes.removeAt(index);
+                _shapes.add(moved);
+                final newIndex = _shapes.length - 1;
+                if (_selected.contains(index)) {
+                  _selected.remove(index);
+                  _selected.add(newIndex);
+                } else {
+                  _selected.clear();
+                  _selected.add(newIndex);
+                }
+                _selectedShapeIndex = newIndex;
+              });
+            },
+            onPanUpdate: (details) {
+              if (_interactingWithHandle) return;
+              if (_selected.contains(index)) {
+                setState(() {
+                  final delta = details.delta / _zoom;
+                  for (final sel in _selected) {
+                    final shp = _shapes[sel];
+                    if (shp.locked) continue;
+                    shp.position += delta;
+                    final renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+                    if (renderBox != null) {
+                      final sizeCanvas = renderBox.size;
+                      final maxX = sizeCanvas.width - shp.size;
+                      final maxY = sizeCanvas.height - shp.size;
+                      shp.position = Offset(
+                        shp.position.dx.clamp(0.0, maxX),
+                        shp.position.dy.clamp(0.0, maxY),
+                      );
+                    }
+                  }
+                });
+              }
+            },
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  left: outerPad,
+                  top: outerPad,
+                  width: s.size,
+                  height: s.size,
+                  child: Transform.rotate(
+                    angle: s.rotation,
+                    child: Container(
+                      decoration: isSelected
+                          ? BoxDecoration(
+                              border: Border.all(
+                                color: AppTheme.colors.primary,
+                                width: 1.2,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            )
+                          : null,
+                      padding: EdgeInsets.all(isSelected ? 2 : 0),
+                      child: Image.asset(
+                        s.asset,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stack) => Icon(
+                          Icons.crop_square,
+                          size: s.size * 0.6,
+                          color: Colors.grey[400],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (isSelected) ...[
+                  Positioned(
+                    top: outerPad - (handleSize + 10),
+                    right: outerPad - (handleSize / 2),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (_) => _interactingWithHandle = true,
+                      onTapCancel: () => _interactingWithHandle = false,
+                      onTapUp: (_) => _interactingWithHandle = false,
+                      onTap: () {
+                        setState(() {
+                          final toRemove = _selected.isNotEmpty ? _selected.toList() : [index];
+                          toRemove.sort((a,b)=>b.compareTo(a));
+                          for (final i in toRemove) {
+                            _shapes.removeAt(i);
+                          }
+                          _selected.clear();
+                          _selectedShapeIndex = -1;
+                        });
+                      },
+                      child: Container(
+                        width: handleSize + 10,
+                        height: handleSize + 10,
+                        decoration: const BoxDecoration(
+                          color: Colors.redAccent,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.close, size: 14, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: outerPad - (handleSize + 12),
+                    left: outerPad - (handleSize / 2),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanDown: (_) => _interactingWithHandle = true,
+                      onPanCancel: () => _interactingWithHandle = false,
+                      onPanEnd: (_) => _interactingWithHandle = false,
+                      onPanUpdate: (details) {
+                        setState(() {
+                          final center = s.position + Offset(s.size / 2, s.size / 2);
+                          final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+                          if (box != null) {
+                            final local = box.globalToLocal(details.globalPosition);
+                            final canvasPoint = _widgetToCanvas(local);
+                            final vector = canvasPoint - center;
+                            s.rotation = math.atan2(vector.dy, vector.dx);
+                          }
+                        });
+                      },
+                      child: Container(
+                        width: handleSize + 10,
+                        height: handleSize + 10,
+                        decoration: BoxDecoration(
+                          color: AppTheme.colors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.rotate_right, size: 14, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: outerPad - (handleSize / 2),
+                    right: outerPad - (handleSize / 2),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanDown: (_) => _interactingWithHandle = true,
+                      onPanCancel: () => _interactingWithHandle = false,
+                      onPanEnd: (_) => _interactingWithHandle = false,
+                      onPanUpdate: (details) {
+                        setState(() {
+                          final keys = HardwareKeyboard.instance.logicalKeysPressed;
+                          final keepProportion = keys.contains(LogicalKeyboardKey.shiftLeft) || keys.contains(LogicalKeyboardKey.shiftRight);
+                          if (_selected.length <= 1) {
+                            final rawDelta = keepProportion
+                                ? (details.delta.dx.abs() >= details.delta.dy.abs() ? details.delta.dx : details.delta.dy)
+                                : details.delta.dx;
+                            double newSize = s.size + rawDelta / _zoom;
+                            newSize = newSize.clamp(24.0, 320.0);
+                            final renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+                            if (renderBox != null) {
+                              final sizeCanvas = renderBox.size;
+                              if (s.position.dx + newSize > sizeCanvas.width) {
+                                newSize = sizeCanvas.width - s.position.dx;
+                              }
+                              if (s.position.dy + newSize > sizeCanvas.height) {
+                                newSize = sizeCanvas.height - s.position.dy;
+                              }
+                            }
+                            if (keepProportion) {
+                              newSize = (newSize / 8).round() * 8;
+                            }
+                            s.size = newSize;
+                          } else {
+                            final bounds = _selectionBounds();
+                            if (bounds == null) return;
+                            final anchor = bounds.topLeft;
+                            final cur = bounds.bottomRight;
+                            final newBR = cur + details.delta / _zoom;
+                            final newW = (newBR.dx - anchor.dx).clamp(24.0, double.infinity);
+                            final newH = (newBR.dy - anchor.dy).clamp(24.0, double.infinity);
+                            final sx = newW / bounds.width;
+                            final sy = newH / bounds.height;
+                            final scale = keepProportion ? math.min(sx, sy) : math.min(sx, sy);
+                            final center = bounds.center;
+                            for (final idx in _selected) {
+                              final shp = _shapes[idx];
+                              if (shp.locked) continue;
+                              final rel = shp.position + Offset(shp.size/2, shp.size/2) - center;
+                              final relScaled = rel * scale;
+                              shp.size = (shp.size * scale).clamp(16.0, 640.0);
+                              shp.position = center + relScaled - Offset(shp.size/2, shp.size/2);
+                            }
+                          }
+                        });
+                      },
+                      child: Container(
+                        width: handleSize + 10,
+                        height: handleSize + 10,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: AppTheme.colors.primary, width: 1.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.open_in_full, size: 14, color: Colors.black87),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
 
   void _showProfileMenu() {
     showMenu(
