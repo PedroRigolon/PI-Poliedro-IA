@@ -33,6 +33,18 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script>
+    // Prevenir zoom da página do Chrome com Ctrl + Scroll para não interferir nos gestos do app
+    window.addEventListener(
+      'wheel',
+      function (e) {
+        if (e.ctrlKey) {
+          e.preventDefault();
+        }
+      },
+      { passive: false }
+    );
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

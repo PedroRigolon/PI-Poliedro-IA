@@ -54,6 +54,10 @@ dependencies:
 
   # Validações
   form_validator: ^2.1.1
+  pdf: ^3.11.0
+  printing: ^5.13.1
+  file_saver: ^0.2.12
+  image: ^4.2.0
 
 dev_dependencies:
   flutter_test:

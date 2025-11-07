@@ -18,7 +18,10 @@ class CollectionScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Minhas Imagens', style: AppTheme.typography.subtitle.copyWith(fontSize: 20)),
+            Text(
+              'Minhas Imagens',
+              style: AppTheme.typography.subtitle.copyWith(fontSize: 20),
+            ),
             const SizedBox(height: 16),
             Expanded(
               child: GridView.builder(
@@ -36,7 +39,12 @@ class CollectionScreen extends StatelessWidget {
                       color: Colors.grey[100],
                     ),
                     alignment: Alignment.center,
-                    child: Text('Imagem ${index + 1}', style: AppTheme.typography.paragraph.copyWith(fontSize: 14)),
+                    child: Text(
+                      'Imagem ${index + 1}',
+                      style: AppTheme.typography.paragraph.copyWith(
+                        fontSize: 14,
+                      ),
+                    ),
                   );
                 },
               ),

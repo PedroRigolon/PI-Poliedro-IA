@@ -21,7 +21,10 @@ class HistoryScreen extends StatelessWidget {
           itemBuilder: (context, index) {
             return ListTile(
               leading: const Icon(Icons.image_outlined),
-              title: Text('Registro ${index + 1}', style: AppTheme.typography.paragraph.copyWith(fontSize: 16)),
+              title: Text(
+                'Registro ${index + 1}',
+                style: AppTheme.typography.paragraph.copyWith(fontSize: 16),
+              ),
               subtitle: const Text('Gerado em: 2025-11-06 (placeholder)'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {},
