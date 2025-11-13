@@ -49,6 +49,11 @@ class _PlacedShape {
   bool locked;
   bool visible;
   String? groupId;
+  // Campos opcionais para shapes de texto
+  String? textContent;
+  double? fontSize;
+  // Nome customizado (se null, usa nome padrão do asset)
+  String? customName;
   _PlacedShape({
     required this.asset,
     required this.position,
@@ -57,6 +62,9 @@ class _PlacedShape {
     this.locked = false,
     this.visible = true,
     this.groupId,
+    this.textContent,
+    this.fontSize,
+    this.customName,
   }) : rotation = rotation ?? 0;
 
   _PlacedShape copyWith({
@@ -67,6 +75,9 @@ class _PlacedShape {
     bool? locked,
     bool? visible,
     String? groupId,
+    String? textContent,
+    double? fontSize,
+    String? customName,
   }) => _PlacedShape(
     asset: asset ?? this.asset,
     position: position ?? this.position,
@@ -75,6 +86,9 @@ class _PlacedShape {
     locked: locked ?? this.locked,
     visible: visible ?? this.visible,
     groupId: groupId ?? this.groupId,
+    textContent: textContent ?? this.textContent,
+    fontSize: fontSize ?? this.fontSize,
+    customName: customName ?? this.customName,
   );
 }
 
@@ -175,7 +189,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final Map<String, bool> _subExpanded = {
     'Textos': true,
     'Setas': true,
+    'Formas Básicas': true,
     'Mecânica': true,
+    'Eletricidade': true,
     'Óptica': true,
     'Térmica': true,
     'Orgânica': true,
@@ -238,50 +254,42 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           // Navigation rail
           NavigationRail(
-            // When none selected we still provide a valid index for the widget
             selectedIndex: _selectedIndex < 0 ? 0 : _selectedIndex,
             onDestinationSelected: (index) {
               setState(() {
                 if (_selectedIndex == index) {
-                  _selectedIndex = -1; // toggle close
+                  _selectedIndex = -1; // fecha se clicar novamente
                 } else {
                   _selectedIndex = index;
                 }
               });
             },
             labelType: NavigationRailLabelType.all,
-            destinations: [
+            destinations: const [
               NavigationRailDestination(
-                icon: const Icon(Icons.smart_toy),
-                selectedIcon: Icon(
-                  Icons.smart_toy,
-                  color: AppTheme.colors.primary,
-                ),
-                label: const Text('IA'),
+                icon: Icon(Icons.smart_toy),
+                selectedIcon: Icon(Icons.smart_toy),
+                label: Text('IA'),
               ),
               NavigationRailDestination(
-                icon: const Icon(Icons.category),
-                selectedIcon: Icon(
-                  Icons.category,
-                  color: AppTheme.colors.primary,
-                ),
-                label: const Text('Formas'),
+                icon: Icon(Icons.category),
+                selectedIcon: Icon(Icons.category),
+                label: Text('Formas'),
               ),
               NavigationRailDestination(
-                icon: const Icon(Icons.layers_outlined),
-                selectedIcon: Icon(
-                  Icons.layers,
-                  color: AppTheme.colors.primary,
-                ),
-                label: const Text('Camadas'),
+                icon: Icon(Icons.layers_outlined),
+                selectedIcon: Icon(Icons.layers),
+                label: Text('Camadas'),
               ),
               NavigationRailDestination(
-                icon: const Icon(Icons.settings),
-                selectedIcon: Icon(
-                  Icons.settings,
-                  color: AppTheme.colors.primary,
-                ),
-                label: const Text('Configurações'),
+                icon: Icon(Icons.tune),
+                selectedIcon: Icon(Icons.tune),
+                label: Text('Propriedades'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.settings),
+                selectedIcon: Icon(Icons.settings),
+                label: Text('Configurações'),
               ),
             ],
           ),
@@ -933,55 +941,106 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Grupo Geral
                   _buildMateriaHeaderCollapsible('Geral'),
                   if (_materiaExpanded['Geral'] ?? false) ...[
-                    _buildSubSectionCollapsible(
+                    _buildGeneratedSection(
                       'Textos',
-                      'assets/forms/geral/textos',
-                      6,
+                      [
+                        'generated:text',
+                      ],
                     ),
-                    _buildSubSectionCollapsible(
+                    _buildGeneratedSection(
                       'Setas',
-                      'assets/forms/geral/setas',
-                      6,
+                      [
+                        'generated:vector',
+                      ],
+                    ),
+                    _buildGeneratedSection(
+                      'Formas Básicas',
+                      [
+                        'generated:rect',
+                        'generated:circle',
+                        'generated:triangle',
+                        'generated:line_solid',
+                        'generated:line_dashed',
+                      ],
                     ),
                   ],
                   const Divider(height: 24),
                   // Grupo Física
                   _buildMateriaHeaderCollapsible('Física'),
                   if (_materiaExpanded['Física'] ?? false) ...[
-                    _buildSubSectionCollapsible(
+                    _buildGeneratedSection(
                       'Mecânica',
-                      'assets/forms/fisica/mecanica',
-                      6,
+                      [
+                        'generated:block',
+                        'generated:plane',
+                        'generated:pulley',
+                        'generated:spring',
+                        'generated:vector',
+                        'generated:pendulum',
+                        'generated:balance',
+                        'generated:cart',
+                        'generated:friction_surface',
+                        'generated:rope',
+                      ],
                     ),
-                    _buildSubSectionCollapsible(
+                    _buildGeneratedSection(
+                      'Eletricidade',
+                      [
+                        'generated:resistor',
+                        'generated:battery',
+                        'generated:ammeter',
+                        'generated:wire',
+                        'generated:capacitor',
+                        'generated:led',
+                        'generated:diode',
+                        'generated:switch',
+                        'generated:ground',
+                        'generated:ac_source',
+                      ],
+                    ),
+                    _buildGeneratedSection(
                       'Óptica',
-                      'assets/forms/fisica/optica',
-                      5,
+                      [
+                        'generated:convergent_lens',
+                        'generated:divergent_lens',
+                        'generated:mirror',
+                        'generated:light_ray',
+                        'generated:prism',
+                      ],
                     ),
                     _buildSubSectionCollapsible(
                       'Térmica',
                       'assets/forms/fisica/termica',
-                      4,
+                      0,
                     ),
                   ],
                   const Divider(height: 24),
                   // Grupo Química
                   _buildMateriaHeaderCollapsible('Química'),
                   if (_materiaExpanded['Química'] ?? false) ...[
-                    _buildSubSectionCollapsible(
+                    _buildGeneratedSection(
+                      'Vidrarias',
+                      [
+                        'generated:beaker',
+                        'generated:erlenmeyer',
+                        'generated:test_tube',
+                      ],
+                    ),
+                    _buildGeneratedSection(
                       'Orgânica',
-                      'assets/forms/quimica/organica',
-                      5,
+                      [
+                        'generated:benzene',
+                      ],
                     ),
                     _buildSubSectionCollapsible(
                       'Inorgânica',
                       'assets/forms/quimica/inorganica',
-                      5,
+                      0,
                     ),
                     _buildSubSectionCollapsible(
                       'Termoquímica',
                       'assets/forms/quimica/termoquimica',
-                      4,
+                      0,
                     ),
                   ],
                 ],
@@ -1012,7 +1071,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         );
 
-      case 3: // Configurações
+      case 3: // Propriedades
+        return _buildPropertiesPanel();
+
+      case 4: // Configurações
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1085,27 +1147,54 @@ class _HomeScreenState extends State<HomeScreen> {
         final s = reversed[i];
         final index = _shapes.indexOf(s); // índice real
         final isSel = _selected.contains(index) || index == _selectedShapeIndex;
-        final name = s.asset.split('/').last;
+        final displayName = _displayNameForShape(s);
+        
         return ListTile(
           key: ValueKey('layer_$index'),
           selected: isSel,
           selectedTileColor: Colors.blue.withValues(alpha: 0.06),
-          leading: Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey[300]!),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Image.asset(
-              s.asset,
-              fit: BoxFit.contain,
-              errorBuilder: (c, e, st) =>
-                  Icon(Icons.crop_square, size: 18, color: Colors.grey[400]),
+          leading: s.asset.startsWith('generated:')
+              ? Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: CustomPaint(
+                    painter: _shapePainterForKey(s.asset),
+                  ),
+                )
+              : Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.asset(
+                    s.asset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (c, e, st) =>
+                        Icon(Icons.crop_square, size: 18, color: Colors.grey[400]),
+                  ),
+                ),
+          title: InkWell(
+            onTap: () => _showRenameDialog(index),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Icon(Icons.edit, size: 14, color: Colors.grey[600]),
+              ],
             ),
           ),
-          title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: s.groupId != null ? const Text('Grupo') : null,
           trailing: Wrap(
             spacing: 8,
@@ -1276,20 +1365,204 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Thumbnail tile UI
   Widget _thumbTile(String asset) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.grey[300]!),
-        color: Colors.grey[50],
-      ),
-      padding: const EdgeInsets.all(6.0),
-      child: Image.asset(
-        asset,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stack) =>
-            Icon(Icons.crop_square, size: 20, color: Colors.grey[400]),
+    final isGenerated = asset.startsWith('generated:');
+    final name = isGenerated
+        ? _displayNameForKey(asset.replaceFirst('generated:', ''))
+        : _displayNameForAsset(asset);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Tooltip(
+        message: name,
+        waitDuration: const Duration(milliseconds: 250),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        textStyle: const TextStyle(color: Colors.white, fontSize: 11),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.grey[300]!),
+            color: Colors.grey[50],
+          ),
+          padding: const EdgeInsets.all(6.0),
+          child: isGenerated
+              ? CustomPaint(
+                  painter: _shapePainterForKey(asset),
+                  size: const Size(double.infinity, double.infinity),
+                )
+              : Image.asset(
+                  asset,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stack) => Icon(
+                    Icons.crop_square,
+                    size: 20,
+                    color: Colors.grey[400],
+                  ),
+                ),
+        ),
       ),
     );
+  }
+
+  // Seção gerada (shapes desenhados dinamicamente)
+  Widget _buildGeneratedSection(String submateria, List<String> keys) {
+    final expanded = _subExpanded[submateria] ?? true;
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppTheme.spacing.small),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => _toggleSub(submateria),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      submateria,
+                      style: AppTheme.typography.paragraph
+                          .copyWith(fontSize: 13)
+                          .copyWith(color: Colors.grey[700]),
+                    ),
+                  ),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                    color: Colors.grey[600],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 180),
+            crossFadeState: expanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: EdgeInsets.only(top: AppTheme.spacing.small),
+              child: GridView.count(
+                crossAxisCount: 6,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  for (final k in keys)
+                    LongPressDraggable<String>(
+                      data: k,
+                      feedback: Material(
+                        color: Colors.transparent,
+                        child: SizedBox(
+                          width: _shapeSize,
+                          height: _shapeSize,
+                          child: CustomPaint(
+                            painter: _shapePainterForKey(k),
+                          ),
+                        ),
+                      ),
+                      childWhenDragging: Opacity(
+                        opacity: 0.4,
+                        child: _thumbTile(k),
+                      ),
+                      child: GestureDetector(
+                        onTap: () => _insertAtCenter(k),
+                        child: _thumbTile(k),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            secondChild: const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Mapeia chave generated:* para painter
+  CustomPainter _shapePainterForKey(String key) {
+    final base = key.replaceFirst('generated:', '');
+    switch (base) {
+      case 'rect':
+        return _RectPainter();
+      case 'circle':
+        return _CirclePainter();
+      case 'triangle':
+        return _TrianglePainter();
+      case 'line_solid':
+        return _LinePainter(dashed: false);
+      case 'line_dashed':
+        return _LinePainter(dashed: true);
+      case 'block':
+        return _BlockPainter();
+      case 'plane':
+        return _InclinedPlanePainter();
+      case 'pulley':
+        return _PulleyPainter();
+      case 'spring':
+        return _SpringPainter();
+      case 'vector':
+        return _ForceVectorPainter();
+      case 'resistor':
+        return _ResistorPainter();
+      case 'battery':
+        return _BatteryPainter();
+      case 'ammeter':
+        return _AmmeterPainter();
+      case 'wire':
+        return _WirePainter();
+      case 'text':
+        return _TextShapePainter(text: 'Texto', fontSize: 16);
+      // Circuitos expandidos
+      case 'capacitor':
+        return _CapacitorPainter();
+      case 'led':
+        return _LEDPainter();
+      case 'diode':
+        return _DiodePainter();
+      case 'switch':
+        return _SwitchPainter();
+      case 'ground':
+        return _GroundPainter();
+      case 'ac_source':
+        return _ACSourcePainter();
+      // Mecânica expandida
+      case 'pendulum':
+        return _PendulumPainter();
+      case 'balance':
+        return _BalancePainter();
+      case 'cart':
+        return _CartPainter();
+      case 'friction_surface':
+        return _FrictionSurfacePainter();
+      case 'rope':
+        return _RopePainter();
+      // Óptica
+      case 'convergent_lens':
+        return _ConvergentLensPainter();
+      case 'divergent_lens':
+        return _DivergentLensPainter();
+      case 'mirror':
+        return _MirrorPainter();
+      case 'light_ray':
+        return _LightRayPainter();
+      case 'prism':
+        return _PrismPainter();
+      // Química
+      case 'beaker':
+        return _BeakerPainter();
+      case 'erlenmeyer':
+        return _ErlenmeyerPainter();
+      case 'test_tube':
+        return _TestTubePainter();
+      case 'benzene':
+        return _BenzenePainter();
+      default:
+        return _RectPainter();
+    }
   }
 
   void _insertAtCenter(String asset) {
@@ -1309,9 +1582,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _addShape(String asset, Offset position) {
     setState(() {
-      _shapes.add(
-        _PlacedShape(asset: asset, position: position, size: _shapeSize),
-      );
+      if (asset == 'generated:text') {
+        _shapes.add(
+          _PlacedShape(
+            asset: asset,
+            position: position,
+            size: _shapeSize,
+            textContent: 'Texto',
+            fontSize: 16,
+          ),
+        );
+      } else {
+        _shapes.add(
+          _PlacedShape(asset: asset, position: position, size: _shapeSize),
+        );
+      }
     });
   }
 
@@ -1396,6 +1681,17 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
+                  tooltip: 'Propriedades',
+                  icon: const Icon(Icons.tune, size: 18),
+                  color: _selectedIndex == 3 ? AppTheme.colors.primary : Colors.black87,
+                  onPressed: () {
+                    setState(() {
+                      _selectedIndex = 3; // abre painel de propriedades
+                    });
+                  },
+                ),
+                const VerticalDivider(width: 8),
+                IconButton(
                   tooltip: 'Duplicar (Ctrl+D)',
                   icon: const Icon(Icons.copy_all, size: 18),
                   onPressed: _duplicateSelected,
@@ -1437,6 +1733,41 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.keyboard_arrow_down, size: 18),
                   onPressed: _sendToBack,
                 ),
+                // Controles de texto (apenas se seleção for exatamente 1 texto)
+                if (_selected.length == 1 && _shapes[_selected.first].asset == 'generated:text') ...[
+                  const VerticalDivider(width: 8),
+                  _smallRoundButton(
+                    icon: Icons.remove,
+                    onTap: () {
+                      setState(() {
+                        final shp = _shapes[_selected.first];
+                        final cur = (shp.fontSize ?? 16) - 2;
+                        shp.fontSize = cur.clamp(8, 160);
+                        _autoResizeTextShape(shp);
+                      });
+                    },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text('${(_shapes[_selected.first].fontSize ?? 16).round()}'),
+                  ),
+                  _smallRoundButton(
+                    icon: Icons.add,
+                    onTap: () {
+                      setState(() {
+                        final shp = _shapes[_selected.first];
+                        final cur = (shp.fontSize ?? 16) + 2;
+                        shp.fontSize = cur.clamp(8, 160);
+                        _autoResizeTextShape(shp);
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                  _smallRoundButton(
+                    icon: Icons.edit,
+                    onTap: () => _editTextShape(_selected.first),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1656,7 +1987,9 @@ class _HomeScreenState extends State<HomeScreen> {
         height: s.size + outerPad * 2,
         child: IgnorePointer(
           ignoring: _selectedIndex >= 0,
-          child: GestureDetector(
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
               if (_interactingWithHandle) return;
@@ -1718,9 +2051,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     final shp = _shapes[sel];
                     if (shp.locked) continue;
                     shp.position += delta;
-                    final renderBox =
-                        _canvasKey.currentContext?.findRenderObject()
-                            as RenderBox?;
+                    final renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
                     if (renderBox != null) {
                       final sizeCanvas = renderBox.size;
                       final maxX = sizeCanvas.width - shp.size;
@@ -1745,7 +2076,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Transform.rotate(
                     angle: s.rotation,
                     child: Container(
-                      decoration: isSelected
+                      decoration: (isSelected && s.asset != 'generated:text')
                           ? BoxDecoration(
                               border: Border.all(
                                 color: AppTheme.colors.primary,
@@ -1755,15 +2086,25 @@ class _HomeScreenState extends State<HomeScreen> {
                             )
                           : null,
                       padding: EdgeInsets.all(isSelected ? 2 : 0),
-                      child: Image.asset(
-                        s.asset,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stack) => Icon(
-                          Icons.crop_square,
-                          size: s.size * 0.6,
-                          color: Colors.grey[400],
-                        ),
-                      ),
+                      child: s.asset.startsWith('generated:')
+                          ? CustomPaint(
+                              painter: s.asset == 'generated:text'
+                                  ? _TextShapePainter(
+                                      text: s.textContent ?? 'Texto',
+                                      fontSize: s.fontSize ?? 16,
+                                    )
+                                  : _shapePainterForKey(s.asset),
+                              size: Size.infinite,
+                            )
+                          : Image.asset(
+                              s.asset,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stack) => Icon(
+                                Icons.crop_square,
+                                size: s.size * 0.6,
+                                color: Colors.grey[400],
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -1962,6 +2303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ],
             ),
+          ),
           ),
         ),
       );
@@ -2183,6 +2525,206 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
     );
+  }
+
+  // ===== Properties Panel =====
+  Widget _buildPropertiesPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Propriedades',
+              style: AppTheme.typography.title.copyWith(fontSize: 20),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => setState(() => _selectedIndex = -1),
+            ),
+          ],
+        ),
+        SizedBox(height: AppTheme.spacing.medium),
+        Expanded(
+          child: _selected.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.touch_app, size: 48, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Selecione um elemento\npara editar propriedades',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(8),
+                  children: [
+                    _buildPropertySection('Dimensões', [
+                      _buildNumberField(
+                        'Tamanho',
+                        _getCommonValue((s) => s.size),
+                        (v) {
+                          setState(() {
+                            _updateSelectedShapes((s) => s.size = v.clamp(16.0, 640.0));
+                          });
+                        },
+                      ),
+                    ]),
+                    const Divider(height: 24),
+                    _buildPropertySection('Rotação', [
+                      _buildNumberField(
+                        'Graus',
+                        _getCommonValue((s) => s.rotation * 180 / math.pi),
+                        (v) {
+                          setState(() {
+                            _updateSelectedShapes((s) => s.rotation = v * math.pi / 180);
+                          });
+                        },
+                        suffix: '°',
+                      ),
+                      const SizedBox(height: 8),
+                      Slider(
+                        value: (_getCommonValue((s) => s.rotation) ?? 0.0) * 180 / math.pi,
+                        min: -180,
+                        max: 180,
+                        divisions: 72,
+                        label: '${((_getCommonValue((s) => s.rotation) ?? 0.0) * 180 / math.pi).toStringAsFixed(0)}°',
+                        onChanged: (v) => setState(() {
+                          _updateSelectedShapes((s) => s.rotation = v * math.pi / 180);
+                        }),
+                      ),
+                    ]),
+                    const Divider(height: 24),
+                    _buildPropertySection('Estado', [
+                      SwitchListTile(
+                        value: _getCommonBool((s) => s.locked) ?? false,
+                        onChanged: (v) => setState(() {
+                          _updateSelectedShapes((s) => s.locked = v);
+                        }),
+                        title: const Text('Bloqueado'),
+                        subtitle: const Text('Impede edição'),
+                      ),
+                      SwitchListTile(
+                        value: _getCommonBool((s) => s.visible) ?? true,
+                        onChanged: (v) => setState(() {
+                          _updateSelectedShapes((s) => s.visible = v);
+                        }),
+                        title: const Text('Visível'),
+                        subtitle: const Text('Exibir no canvas'),
+                      ),
+                    ]),
+                    // Propriedades específicas de texto
+                    if (_selected.length == 1 && _shapes[_selected.first].asset == 'generated:text') ...[
+                      const Divider(height: 24),
+                      _buildPropertySection('Texto', [
+                        TextFormField(
+                          initialValue: _shapes[_selected.first].textContent ?? 'Texto',
+                          decoration: const InputDecoration(
+                            labelText: 'Conteúdo',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 3,
+                          onChanged: (v) => setState(() {
+                            final s = _shapes[_selected.first];
+                            s.textContent = v.isEmpty ? 'Texto' : v;
+                            _autoResizeTextShape(s);
+                          }),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildNumberField(
+                          'Tamanho da Fonte',
+                          _shapes[_selected.first].fontSize ?? 16.0,
+                          (v) => setState(() {
+                            final s = _shapes[_selected.first];
+                            s.fontSize = v.clamp(8.0, 72.0);
+                            _autoResizeTextShape(s);
+                          }),
+                        ),
+                      ]),
+                    ],
+                    const SizedBox(height: 100), // padding bottom
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPropertySection(String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTheme.typography.title.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        ...children,
+      ],
+    );
+  }
+
+  Widget _buildNumberField(
+    String label,
+    double? value,
+    void Function(double) onChanged, {
+    String suffix = '',
+  }) {
+    final controller = TextEditingController(
+      text: value != null ? value.toStringAsFixed(1) : '',
+    );
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        suffix: suffix.isNotEmpty ? Text(suffix) : null,
+        border: const OutlineInputBorder(),
+        isDense: true,
+      ),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (v) {
+        final parsed = double.tryParse(v);
+        if (parsed != null) {
+          onChanged(parsed);
+        }
+      },
+    );
+  }
+
+  double? _getCommonValue(double Function(_PlacedShape) getter) {
+    if (_selected.isEmpty) return null;
+    final first = getter(_shapes[_selected.first]);
+    for (final i in _selected.skip(1)) {
+      if ((getter(_shapes[i]) - first).abs() > 0.01) {
+        return null; // valores mistos
+      }
+    }
+    return first;
+  }
+
+  bool? _getCommonBool(bool Function(_PlacedShape) getter) {
+    if (_selected.isEmpty) return null;
+    final first = getter(_shapes[_selected.first]);
+    for (final i in _selected.skip(1)) {
+      if (getter(_shapes[i]) != first) {
+        return null; // valores mistos
+      }
+    }
+    return first;
+  }
+
+  void _updateSelectedShapes(void Function(_PlacedShape) updater) {
+    for (final i in _selected) {
+      if (!_shapes[i].locked) {
+        updater(_shapes[i]);
+      }
+    }
   }
 
   // ===== Export helpers =====
@@ -2516,6 +3058,8 @@ class _HomeScreenState extends State<HomeScreen> {
             'locked': s.locked,
             'visible': s.visible,
             'groupId': s.groupId,
+            if (s.textContent != null) 'text': s.textContent,
+            if (s.fontSize != null) 'fontSize': s.fontSize,
           }
       ],
     };
@@ -2665,6 +3209,192 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Botão pequeno redondo para controles de texto
+  Widget _smallRoundButton({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: Colors.grey[400]!),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 16, color: Colors.black87),
+      ),
+    );
+  }
+
+  void _editTextShape(int index) async {
+    if (index < 0 || index >= _shapes.length) return;
+    final s = _shapes[index];
+    if (s.asset != 'generated:text') return;
+    final controller = TextEditingController(text: s.textContent ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Editar texto'),
+            content: TextField(
+            controller: controller,
+            maxLines: 4,
+            decoration: const InputDecoration(hintText: 'Digite...'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+              child: const Text('Salvar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (result != null) {
+      setState(() {
+        s.textContent = result.isEmpty ? 'Texto' : result;
+        _autoResizeTextShape(s);
+      });
+    }
+  }
+
+  void _showRenameDialog(int index) async {
+    if (index < 0 || index >= _shapes.length) return;
+    final s = _shapes[index];
+    final currentName = s.customName ?? _displayNameForShape(s);
+    final controller = TextEditingController(text: currentName);
+    
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Renomear elemento'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Nome do elemento',
+              labelText: 'Nome',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  s.customName = null; // resetar para nome padrão
+                });
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Resetar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+              child: const Text('Salvar'),
+            ),
+          ],
+        );
+      },
+    );
+    
+    if (result != null && result.isNotEmpty) {
+      setState(() {
+        s.customName = result;
+      });
+    }
+  }
+
+  void _autoResizeTextShape(_PlacedShape s) {
+    final span = TextSpan(
+      text: s.textContent ?? 'Texto',
+      style: TextStyle(fontSize: s.fontSize ?? 16),
+    );
+    final tp = TextPainter(text: span, textDirection: TextDirection.ltr, maxLines: 10)..layout();
+    final needed = math.max(tp.width, tp.height) + 12;
+    s.size = needed.clamp(24.0, 640.0);
+  }
+
+  String _displayNameForShape(_PlacedShape s) {
+    // Se tem nome customizado, usa ele
+    if (s.customName != null && s.customName!.isNotEmpty) {
+      return s.customName!;
+    }
+    // Senão, usa nome padrão baseado no asset
+    if (s.asset.startsWith('generated:')) {
+      final key = s.asset.substring('generated:'.length);
+      return _displayNameForKey(key);
+    }
+    return _displayNameForAsset(s.asset);
+  }
+
+  String _displayNameForKey(String key) {
+    switch (key) {
+      case 'rect': return 'Retângulo';
+      case 'circle': return 'Círculo';
+      case 'triangle': return 'Triângulo';
+      case 'line_solid': return 'Linha';
+      case 'line_dashed': return 'Linha Tracejada';
+      case 'block': return 'Bloco';
+      case 'plane': return 'Plano Inclinado';
+      case 'pulley': return 'Polia';
+      case 'spring': return 'Mola';
+      case 'vector': return 'Vetor';
+      case 'resistor': return 'Resistor';
+      case 'battery': return 'Bateria';
+      case 'ammeter': return 'Amperímetro';
+      case 'wire': return 'Fio';
+      case 'text': return 'Texto';
+      // Circuitos expandidos
+      case 'capacitor': return 'Capacitor';
+      case 'led': return 'LED';
+      case 'diode': return 'Diodo';
+      case 'switch': return 'Interruptor';
+      case 'ground': return 'Terra';
+      case 'ac_source': return 'Fonte AC';
+      // Mecânica expandida
+      case 'pendulum': return 'Pêndulo';
+      case 'balance': return 'Balança';
+      case 'cart': return 'Carrinho';
+      case 'friction_surface': return 'Superfície com Atrito';
+      case 'rope': return 'Corda';
+      // Óptica
+      case 'convergent_lens': return 'Lente Convergente';
+      case 'divergent_lens': return 'Lente Divergente';
+      case 'mirror': return 'Espelho';
+      case 'light_ray': return 'Raio de Luz';
+      case 'prism': return 'Prisma';
+      // Química
+      case 'beaker': return 'Béquer';
+      case 'erlenmeyer': return 'Erlenmeyer';
+      case 'test_tube': return 'Tubo de Ensaio';
+      case 'benzene': return 'Benzeno';
+      default: return 'Forma';
+    }
+  }
+
+  String _displayNameForAsset(String assetPath) {
+    final parts = assetPath.split('/');
+    if (parts.length >= 3) {
+      return parts[parts.length - 2];
+    }
+    return 'Forma';
+  }
+
 }
 
 // Pintor do retângulo de seleção (marquee)
@@ -2689,4 +3419,900 @@ class _MarqueePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MarqueePainter oldDelegate) =>
       oldDelegate.rect != rect;
+}
+
+// ================= Painters para shapes gerados =================
+
+class _RectPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = Rect.fromLTWH(0, 0, size.width, size.height);
+    final paint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(r, const Radius.circular(6)),
+      paint,
+    );
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CirclePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawCircle(
+      size.center(Offset.zero),
+      size.shortestSide / 2,
+      paint,
+    );
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _TrianglePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width/2, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    final paint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _LinePainter extends CustomPainter {
+  final bool dashed;
+  _LinePainter({required this.dashed});
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black87
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    if (!dashed) {
+      canvas.drawLine(Offset(0, size.height/2), Offset(size.width, size.height/2), paint);
+    } else {
+      const dashWidth = 8.0;
+      const dashSpace = 6.0;
+      double x = 0;
+      final y = size.height/2;
+      while (x < size.width) {
+        final x2 = math.min(x + dashWidth, size.width);
+        canvas.drawLine(Offset(x, y), Offset(x2, y), paint);
+        x += dashWidth + dashSpace;
+      }
+    }
+  }
+  @override
+  bool shouldRepaint(covariant _LinePainter oldDelegate) => oldDelegate.dashed != dashed;
+}
+
+class _BlockPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final r = Rect.fromLTWH(1, 1, size.width - 2, size.height - 2);
+    canvas.drawRect(r, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _InclinedPlanePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, size.height)
+      ..lineTo(size.width, size.height)
+      ..lineTo(size.width, 0)
+      ..close();
+    final paint = Paint()..color = Colors.grey.shade400;
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _PulleyPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final outer = Paint()..color = Colors.grey.shade300;
+    final inner = Paint()..color = Colors.grey.shade600;
+    final center = size.center(Offset.zero);
+    canvas.drawCircle(center, size.shortestSide/2, outer);
+    canvas.drawCircle(center, size.shortestSide/4, inner);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _SpringPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.deepPurple
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final path = Path();
+    const turns = 6;
+    final h = size.height;
+    final w = size.width;
+    for (int i = 0; i <= turns; i++) {
+      final t = i / turns;
+      final x = t * w;
+      final y = (math.sin(t * math.pi * 2) * h/2 * 0.5) + h/2;
+      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+    }
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ForceVectorPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final start = Offset(size.width * 0.15, size.height * 0.85);
+    final end = Offset(size.width * 0.85, size.height * 0.15);
+    canvas.drawLine(start, end, paint);
+    final headSize = 10.0;
+    final angle = math.atan2(end.dy - start.dy, end.dx - start.dx);
+    final path = Path()
+      ..moveTo(end.dx, end.dy)
+      ..lineTo(
+        end.dx - headSize * math.cos(angle - 0.35),
+        end.dy - headSize * math.sin(angle - 0.35),
+      )
+      ..moveTo(end.dx, end.dy)
+      ..lineTo(
+        end.dx - headSize * math.cos(angle + 0.35),
+        end.dy - headSize * math.sin(angle + 0.35),
+      );
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ResistorPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final midY = size.height / 2;
+    final leftLead = 6.0;
+    final rightLead = size.width - 6.0;
+    final zigW = rightLead - leftLead;
+    final segment = zigW / 7;
+    final path = Path()
+      ..moveTo(0, midY)
+      ..lineTo(leftLead, midY);
+    double x = leftLead;
+    bool up = true;
+    for (int i = 0; i < 7; i++) {
+      x += segment;
+      path.lineTo(x, midY + (up ? -8 : 8));
+      up = !up;
+    }
+    path.lineTo(rightLead, midY);
+    path.lineTo(size.width, midY);
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _BatteryPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final midY = size.height / 2;
+    final centerX = size.width / 2;
+    final longHalf = 14.0;
+    final shortHalf = 8.0;
+    canvas.drawLine(
+      Offset(centerX - 10, midY - longHalf),
+      Offset(centerX - 10, midY + longHalf),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(centerX + 10, midY - shortHalf),
+      Offset(centerX + 10, midY + shortHalf),
+      paint,
+    );
+    canvas.drawLine(Offset(0, midY), Offset(centerX - 10, midY), paint);
+    canvas.drawLine(Offset(centerX + 10, midY), Offset(size.width, midY), paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _AmmeterPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final border = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final r = size.shortestSide / 2 - 2;
+    final c = size.center(Offset.zero);
+    canvas.drawCircle(c, r, border);
+    final tp = TextPainter(
+      text: const TextSpan(
+        text: 'A',
+        style: TextStyle(
+          fontSize: 16,
+          color: Colors.black,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, c - Offset(tp.width/2, tp.height/2));
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _WirePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset(0, size.height/2), Offset(size.width, size.height/2), paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Painter dinâmico para texto (sem borda / sem fundo)
+class _TextShapePainter extends CustomPainter {
+  final String text;
+  final double fontSize;
+  _TextShapePainter({required this.text, required this.fontSize});
+  @override
+  void paint(Canvas canvas, Size size) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: fontSize,
+          color: Colors.black,
+        ),
+      ),
+      maxLines: 10,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: size.width);
+    tp.paint(
+      canvas,
+      size.center(Offset.zero) - Offset(tp.width / 2, tp.height / 2),
+    );
+  }
+  @override
+  bool shouldRepaint(covariant _TextShapePainter oldDelegate) =>
+      oldDelegate.text != text || oldDelegate.fontSize != fontSize;
+}
+
+// ================= CIRCUITOS ELÉTRICOS EXPANDIDOS =================
+
+class _CapacitorPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final midY = size.height / 2;
+    final centerX = size.width / 2;
+    final plateHeight = 20.0;
+    // Placa esquerda
+    canvas.drawLine(
+      Offset(centerX - 4, midY - plateHeight / 2),
+      Offset(centerX - 4, midY + plateHeight / 2),
+      paint,
+    );
+    // Placa direita
+    canvas.drawLine(
+      Offset(centerX + 4, midY - plateHeight / 2),
+      Offset(centerX + 4, midY + plateHeight / 2),
+      paint,
+    );
+    // Fios
+    canvas.drawLine(Offset(0, midY), Offset(centerX - 4, midY), paint);
+    canvas.drawLine(Offset(centerX + 4, midY), Offset(size.width, midY), paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _LEDPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    // Triângulo (ânodo)
+    final trianglePath = Path()
+      ..moveTo(centerX - 8, centerY - 10)
+      ..lineTo(centerX - 8, centerY + 10)
+      ..lineTo(centerX + 6, centerY)
+      ..close();
+    canvas.drawPath(trianglePath, paint);
+    // Barra vertical (cátodo)
+    canvas.drawLine(
+      Offset(centerX + 6, centerY - 10),
+      Offset(centerX + 6, centerY + 10),
+      paint,
+    );
+    // Fios
+    canvas.drawLine(Offset(0, centerY), Offset(centerX - 8, centerY), paint);
+    canvas.drawLine(Offset(centerX + 6, centerY), Offset(size.width, centerY), paint);
+    // Setas de luz
+    final arrowPaint = Paint()
+      ..color = Colors.amber[700]!
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final arrow1Start = Offset(centerX + 12, centerY - 8);
+    final arrow1End = Offset(centerX + 18, centerY - 14);
+    canvas.drawLine(arrow1Start, arrow1End, arrowPaint);
+    canvas.drawLine(arrow1End, Offset(arrow1End.dx - 3, arrow1End.dy + 2), arrowPaint);
+    canvas.drawLine(arrow1End, Offset(arrow1End.dx - 2, arrow1End.dy + 3), arrowPaint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _DiodePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    // Triângulo
+    final trianglePath = Path()
+      ..moveTo(centerX - 8, centerY - 10)
+      ..lineTo(centerX - 8, centerY + 10)
+      ..lineTo(centerX + 6, centerY)
+      ..close();
+    canvas.drawPath(trianglePath, paint);
+    // Barra vertical
+    canvas.drawLine(
+      Offset(centerX + 6, centerY - 10),
+      Offset(centerX + 6, centerY + 10),
+      paint,
+    );
+    // Fios
+    canvas.drawLine(Offset(0, centerY), Offset(centerX - 8, centerY), paint);
+    canvas.drawLine(Offset(centerX + 6, centerY), Offset(size.width, centerY), paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _SwitchPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final midY = size.height / 2;
+    final leftX = size.width * 0.2;
+    final rightX = size.width * 0.8;
+    // Pontos de contato
+    canvas.drawCircle(Offset(leftX, midY), 2, Paint()..color = Colors.black);
+    canvas.drawCircle(Offset(rightX, midY), 2, Paint()..color = Colors.black);
+    // Alavanca (aberta)
+    canvas.drawLine(
+      Offset(leftX, midY),
+      Offset(rightX - 5, midY - 12),
+      paint,
+    );
+    // Fios
+    canvas.drawLine(Offset(0, midY), Offset(leftX, midY), paint);
+    canvas.drawLine(Offset(rightX, midY), Offset(size.width, midY), paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _GroundPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final centerX = size.width / 2;
+    final topY = size.height * 0.2;
+    final bottomY = size.height * 0.8;
+    // Linha vertical
+    canvas.drawLine(Offset(centerX, topY), Offset(centerX, bottomY - 15), paint);
+    // Três linhas horizontais (símbolo terra)
+    canvas.drawLine(Offset(centerX - 12, bottomY - 15), Offset(centerX + 12, bottomY - 15), paint);
+    canvas.drawLine(Offset(centerX - 8, bottomY - 10), Offset(centerX + 8, bottomY - 10), paint);
+    canvas.drawLine(Offset(centerX - 4, bottomY - 5), Offset(centerX + 4, bottomY - 5), paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ACSourcePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2 - 4;
+    // Círculo
+    canvas.drawCircle(center, radius, paint);
+    // Onda senoidal dentro
+    final wavePaint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final path = Path();
+    const points = 20;
+    for (int i = 0; i <= points; i++) {
+      final t = i / points;
+      final x = center.dx - radius * 0.6 + t * radius * 1.2;
+      final y = center.dy + math.sin(t * math.pi * 4) * radius * 0.3;
+      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+    }
+    canvas.drawPath(path, wavePaint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ================= MECÂNICA EXPANDIDA =================
+
+class _PendulumPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    // Ponto de fixação
+    final pivotX = size.width / 2;
+    final pivotY = size.height * 0.1;
+    canvas.drawCircle(Offset(pivotX, pivotY), 3, Paint()..color = Colors.black);
+    // Fio
+    final bobX = size.width * 0.7;
+    final bobY = size.height * 0.8;
+    canvas.drawLine(Offset(pivotX, pivotY), Offset(bobX, bobY), paint);
+    // Massa (círculo)
+    final bobPaint = Paint()
+      ..color = Colors.grey.shade400
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(bobX, bobY), 8, bobPaint);
+    canvas.drawCircle(Offset(bobX, bobY), 8, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _BalancePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    // Fulcro (triângulo)
+    final fulcrum = Path()
+      ..moveTo(centerX - 10, centerY + 10)
+      ..lineTo(centerX, centerY - 5)
+      ..lineTo(centerX + 10, centerY + 10)
+      ..close();
+    canvas.drawPath(fulcrum, Paint()..color = Colors.grey.shade600);
+    canvas.drawPath(fulcrum, paint);
+    // Barra horizontal
+    canvas.drawLine(
+      Offset(size.width * 0.1, centerY - 5),
+      Offset(size.width * 0.9, centerY - 5),
+      paint..strokeWidth = 3,
+    );
+    // Pratos
+    final platePaint = Paint()
+      ..color = Colors.grey.shade300
+      ..style = PaintingStyle.fill;
+    final leftPlate = Rect.fromCenter(
+      center: Offset(size.width * 0.2, centerY - 15),
+      width: 20,
+      height: 4,
+    );
+    final rightPlate = Rect.fromCenter(
+      center: Offset(size.width * 0.8, centerY - 15),
+      width: 20,
+      height: 4,
+    );
+    canvas.drawRect(leftPlate, platePaint);
+    canvas.drawRect(rightPlate, platePaint);
+    canvas.drawRect(leftPlate, paint..strokeWidth = 1);
+    canvas.drawRect(rightPlate, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CartPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    // Corpo do carrinho
+    final body = Rect.fromLTWH(
+      size.width * 0.15,
+      size.height * 0.3,
+      size.width * 0.7,
+      size.height * 0.3,
+    );
+    canvas.drawRect(body, Paint()..color = Colors.grey.shade300);
+    canvas.drawRect(body, paint);
+    // Rodas
+    final wheelPaint = Paint()
+      ..color = Colors.grey.shade700
+      ..style = PaintingStyle.fill;
+    final leftWheel = Offset(size.width * 0.3, size.height * 0.75);
+    final rightWheel = Offset(size.width * 0.7, size.height * 0.75);
+    canvas.drawCircle(leftWheel, 8, wheelPaint);
+    canvas.drawCircle(rightWheel, 8, wheelPaint);
+    canvas.drawCircle(leftWheel, 8, paint);
+    canvas.drawCircle(rightWheel, 8, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _FrictionSurfacePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    // Linha de superfície
+    final surfaceY = size.height * 0.7;
+    canvas.drawLine(Offset(0, surfaceY), Offset(size.width, surfaceY), paint);
+    // Padrão de rugosidade (dentinhos)
+    final zigzagPaint = Paint()
+      ..color = Colors.grey.shade600
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final path = Path()..moveTo(0, surfaceY);
+    const teeth = 12;
+    for (int i = 0; i < teeth; i++) {
+      final x = (i / teeth) * size.width;
+      final nextX = ((i + 1) / teeth) * size.width;
+      path.lineTo(x + (nextX - x) / 2, surfaceY + 4);
+      path.lineTo(nextX, surfaceY);
+    }
+    canvas.drawPath(path, zigzagPaint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _RopePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.brown.shade700
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+    // Linha ondulada
+    final path = Path();
+    const points = 15;
+    for (int i = 0; i <= points; i++) {
+      final t = i / points;
+      final x = t * size.width;
+      final y = size.height / 2 + math.sin(t * math.pi * 3) * 3;
+      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+    }
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ================= ÓPTICA =================
+
+class _ConvergentLensPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final centerX = size.width / 2;
+    final h = size.height;
+    // Lente convergente (biconvexa)
+    final path = Path()
+      ..moveTo(centerX - 2, 0)
+      ..quadraticBezierTo(centerX - 10, h / 2, centerX - 2, h)
+      ..lineTo(centerX + 2, h)
+      ..quadraticBezierTo(centerX + 10, h / 2, centerX + 2, 0)
+      ..close();
+    canvas.drawPath(path, paint);
+    // Linha central
+    final axisPaint = Paint()
+      ..color = Colors.grey.shade400
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset(0, h / 2), Offset(size.width, h / 2), axisPaint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _DivergentLensPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final centerX = size.width / 2;
+    final h = size.height;
+    // Lente divergente (bicôncava)
+    final path = Path()
+      ..moveTo(centerX - 2, 0)
+      ..quadraticBezierTo(centerX + 6, h / 2, centerX - 2, h)
+      ..lineTo(centerX + 2, h)
+      ..quadraticBezierTo(centerX - 6, h / 2, centerX + 2, 0)
+      ..close();
+    canvas.drawPath(path, paint);
+    // Linha central
+    final axisPaint = Paint()
+      ..color = Colors.grey.shade400
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset(0, h / 2), Offset(size.width, h / 2), axisPaint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _MirrorPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey.shade700
+      ..strokeWidth = 4
+      ..style = PaintingStyle.stroke;
+    // Espelho côncavo (arco)
+    final path = Path()
+      ..moveTo(size.width * 0.3, 0)
+      ..quadraticBezierTo(
+        size.width * 0.1,
+        size.height / 2,
+        size.width * 0.3,
+        size.height,
+      );
+    canvas.drawPath(path, paint);
+    // Lado reflexivo (mais grosso)
+    final reflectivePaint = Paint()
+      ..color = Colors.grey.shade400
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final reflectivePath = Path()
+      ..moveTo(size.width * 0.3, 0)
+      ..quadraticBezierTo(
+        size.width * 0.15,
+        size.height / 2,
+        size.width * 0.3,
+        size.height,
+      );
+    canvas.drawPath(reflectivePath, reflectivePaint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _LightRayPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.yellow.shade700
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    // Raio de luz com ponta de seta
+    final start = Offset(size.width * 0.1, size.height / 2);
+    final end = Offset(size.width * 0.9, size.height / 2);
+    canvas.drawLine(start, end, paint);
+    // Seta
+    final headSize = 8.0;
+    final arrowPath = Path()
+      ..moveTo(end.dx, end.dy)
+      ..lineTo(end.dx - headSize, end.dy - headSize / 2)
+      ..lineTo(end.dx - headSize, end.dy + headSize / 2)
+      ..close();
+    canvas.drawPath(arrowPath, Paint()..color = Colors.yellow.shade700);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _PrismPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    // Triângulo equilátero
+    final path = Path()
+      ..moveTo(size.width / 2, size.height * 0.1)
+      ..lineTo(size.width * 0.1, size.height * 0.9)
+      ..lineTo(size.width * 0.9, size.height * 0.9)
+      ..close();
+    final fillPaint = Paint()
+      ..color = Colors.cyan.withValues(alpha: 0.15)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, fillPaint);
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ================= QUÍMICA =================
+
+class _BeakerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    // Béquer (forma trapezoidal)
+    final path = Path()
+      ..moveTo(size.width * 0.25, size.height * 0.1)
+      ..lineTo(size.width * 0.15, size.height * 0.9)
+      ..lineTo(size.width * 0.85, size.height * 0.9)
+      ..lineTo(size.width * 0.75, size.height * 0.1)
+      ..close();
+    canvas.drawPath(path, paint);
+    // Bico
+    canvas.drawLine(
+      Offset(size.width * 0.75, size.height * 0.3),
+      Offset(size.width * 0.85, size.height * 0.25),
+      paint,
+    );
+    // Líquido
+    final liquidPath = Path()
+      ..moveTo(size.width * 0.2, size.height * 0.5)
+      ..lineTo(size.width * 0.17, size.height * 0.9)
+      ..lineTo(size.width * 0.83, size.height * 0.9)
+      ..lineTo(size.width * 0.8, size.height * 0.5)
+      ..close();
+    canvas.drawPath(
+      liquidPath,
+      Paint()..color = Colors.blue.withValues(alpha: 0.2),
+    );
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ErlenmeyerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    // Erlenmeyer (cone + gargalo)
+    final path = Path()
+      ..moveTo(size.width * 0.4, size.height * 0.05)
+      ..lineTo(size.width * 0.4, size.height * 0.3)
+      ..lineTo(size.width * 0.1, size.height * 0.9)
+      ..lineTo(size.width * 0.9, size.height * 0.9)
+      ..lineTo(size.width * 0.6, size.height * 0.3)
+      ..lineTo(size.width * 0.6, size.height * 0.05)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _TestTubePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    // Tubo de ensaio
+    final path = Path()
+      ..moveTo(size.width * 0.3, size.height * 0.05)
+      ..lineTo(size.width * 0.3, size.height * 0.75)
+      ..quadraticBezierTo(
+        size.width * 0.3,
+        size.height * 0.9,
+        size.width * 0.5,
+        size.height * 0.9,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.7,
+        size.height * 0.9,
+        size.width * 0.7,
+        size.height * 0.75,
+      )
+      ..lineTo(size.width * 0.7, size.height * 0.05);
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _BenzenePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2 - 8;
+    // Hexágono
+    final hexPath = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = (i * 60 - 90) * math.pi / 180;
+      final x = center.dx + radius * math.cos(angle);
+      final y = center.dy + radius * math.sin(angle);
+      if (i == 0) hexPath.moveTo(x, y); else hexPath.lineTo(x, y);
+    }
+    hexPath.close();
+    canvas.drawPath(hexPath, paint);
+    // Círculo interno (ligações duplas)
+    canvas.drawCircle(center, radius * 0.6, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
