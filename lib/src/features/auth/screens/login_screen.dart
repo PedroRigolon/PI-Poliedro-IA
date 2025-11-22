@@ -34,6 +34,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 vertical: AppTheme.spacing.large,
               ),
               child: Card(
+                elevation: 4,
+                shadowColor: Colors.black26,
+                color: AppTheme.colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Colors.black12),
+                ),
                 child: Padding(
                   padding: EdgeInsets.all(AppTheme.spacing.large),
                   child: Column(
@@ -49,12 +56,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text('Email', style: AppTheme.typography.label),
+                            Text(
+                              'Email',
+                              style: AppTheme.typography.label.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             SizedBox(height: AppTheme.spacing.small),
                             TextFormField(
                               controller: _emailController,
+                              style: TextStyle(color: Colors.grey[800]),
                               decoration: InputDecoration(
                                 hintText: 'Digite seu email...',
+                                hintStyle: TextStyle(color: Colors.grey[800]),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: Colors.black12),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: Colors.black12),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: Colors.black26),
+                                ),
                               ),
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
@@ -71,12 +97,31 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             SizedBox(height: AppTheme.spacing.medium),
 
-                            Text('Senha', style: AppTheme.typography.label),
+                            Text(
+                              'Senha',
+                              style: AppTheme.typography.label.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             SizedBox(height: AppTheme.spacing.small),
                             TextFormField(
                               controller: _passwordController,
+                              style: TextStyle(color: Colors.grey[800]),
                               decoration: InputDecoration(
                                 hintText: 'Digite sua senha...',
+                                hintStyle: TextStyle(color: Colors.grey[800]),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: Colors.black12),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: Colors.black12),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: Colors.black26),
+                                ),
                               ),
                               obscureText: true,
                               validator: (value) {

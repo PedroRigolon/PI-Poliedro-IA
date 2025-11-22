@@ -16,6 +16,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../models/diagram_template.dart';
 
 /// Simple grid painter for the empty canvas area.
 class CanvasGridPainter extends CustomPainter {
@@ -168,12 +169,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isBusy = false;
   String? _busyMessage;
 
-  // Estado do painel IA
-  String _iaSubject = 'Física';
-  String _iaSub = 'Mecânica';
-  String _iaElement = 'Bloco';
-  String _iaStyle = 'Didático';
-  String _iaPalette = 'P&B';
+  // Estado do painel de Assistente de Diagramas
+  String _selectedDiagramCategory = '';
+  String _selectedDiagramSubcategory = '';
+  
   // Marquee selection
   bool _isMarquee = false;
   Offset? _marqueeStart;
@@ -2403,45 +2402,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ===== IA Panel =====
   Widget _buildIaPanel() {
-    final subjects = ['Física', 'Química'];
-    final subsBySubject = {
-      'Física': ['Mecânica', 'Óptica', 'Térmica'],
-      'Química': ['Orgânica', 'Inorgânica', 'Termoquímica'],
-    };
-    final elementsBySub = {
-      'Mecânica': ['Bloco', 'Plano Inclinado', 'Seta de Força'],
-      'Óptica': ['Lente', 'Espelho', 'Feixe'],
-      'Térmica': ['Termômetro', 'Reservatório'],
-      'Orgânica': ['Estrutura', 'Cadeia'],
-      'Inorgânica': ['Cátions/Ânions', 'Sais'],
-      'Termoquímica': ['Calorímetro', 'Reação'],
-    };
-    // Mapeamento simples para assets existentes (placeholders)
-    String _mapToAsset(String subject, String sub, String element) {
-      switch (sub) {
-        case 'Mecânica':
-          return 'assets/forms/fisica/mecanica/shape1.png';
-        case 'Óptica':
-          return 'assets/forms/fisica/optica/shape1.png';
-        case 'Térmica':
-          return 'assets/forms/fisica/termica/shape1.png';
-        case 'Orgânica':
-          return 'assets/forms/quimica/organica/shape1.png';
-        case 'Inorgânica':
-          return 'assets/forms/quimica/inorganica/shape1.png';
-        case 'Termoquímica':
-          return 'assets/forms/quimica/termoquimica/shape1.png';
-        default:
-          return 'assets/forms/geral/setas/shape1.png';
-      }
-    }
-
-    final subs = subsBySubject[_iaSubject] ?? [];
-    if (!subs.contains(_iaSub)) _iaSub = subs.isNotEmpty ? subs.first : '';
-    final elements = elementsBySub[_iaSub] ?? [];
-    if (!elements.contains(_iaElement) && elements.isNotEmpty) {
-      _iaElement = elements.first;
-    }
+    final categories = DiagramTemplateLibrary.getCategories();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2450,7 +2411,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'IA (geração guiada)',
+              'Assistente de Diagramas',
               style: AppTheme.typography.title.copyWith(fontSize: 20),
             ),
             IconButton(
@@ -2460,71 +2421,268 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         SizedBox(height: AppTheme.spacing.medium),
-        DropdownButtonFormField<String>(
-          value: _iaSubject,
-          items: subjects
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-              .toList(),
-          onChanged: (v) => setState(() {
-            _iaSubject = v ?? _iaSubject;
-          }),
-          decoration: const InputDecoration(labelText: 'Matéria'),
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          value: _iaSub,
-          items: subs
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-              .toList(),
-          onChanged: (v) => setState(() {
-            _iaSub = v ?? _iaSub;
-          }),
-          decoration: const InputDecoration(labelText: 'Submatéria'),
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          value: _iaElement,
-          items: elements
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-              .toList(),
-          onChanged: (v) => setState(() {
-            _iaElement = v ?? _iaElement;
-          }),
-          decoration: const InputDecoration(labelText: 'Elemento'),
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          value: _iaStyle,
-          items: ['Didático', 'Esboço', 'Realista']
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-              .toList(),
-          onChanged: (v) => setState(() {
-            _iaStyle = v ?? _iaStyle;
-          }),
-          decoration: const InputDecoration(labelText: 'Estilo'),
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          value: _iaPalette,
-          items: ['P&B', 'Alto Contraste', 'Colorido']
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-              .toList(),
-          onChanged: (v) => setState(() {
-            _iaPalette = v ?? _iaPalette;
-          }),
-          decoration: const InputDecoration(labelText: 'Paleta'),
-        ),
-        SizedBox(height: AppTheme.spacing.medium),
-        ElevatedButton.icon(
-          icon: const Icon(Icons.auto_awesome),
-          onPressed: () {
-            final asset = _mapToAsset(_iaSubject, _iaSub, _iaElement);
-            _insertAtCenter(asset);
-          },
-          label: const Text('Gerar e inserir no canvas'),
+        
+        // Lista de categorias e subcategorias
+        Expanded(
+          child: ListView(
+            children: [
+              for (final category in categories) ...[
+                _buildDiagramCategoryHeader(category),
+                if (_selectedDiagramCategory == category) ...[
+                  for (final subcategory in DiagramTemplateLibrary.getSubcategories(category))
+                    _buildDiagramSubcategorySection(category, subcategory),
+                ],
+              ],
+            ],
+          ),
         ),
       ],
     );
+  }
+
+  Widget _buildDiagramCategoryHeader(String category) {
+    final isExpanded = _selectedDiagramCategory == category;
+    
+    // Ícones por categoria
+    IconData getCategoryIcon() {
+      switch (category) {
+        case 'Fisica':
+          return Icons.science;
+        case 'Quimica':
+          return Icons.biotech;
+        case 'Geral':
+          return Icons.category;
+        default:
+          return Icons.folder;
+      }
+    }
+    
+    return InkWell(
+      onTap: () {
+        setState(() {
+          if (isExpanded) {
+            _selectedDiagramCategory = '';
+            _selectedDiagramSubcategory = '';
+          } else {
+            _selectedDiagramCategory = category;
+            _selectedDiagramSubcategory = '';
+          }
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isExpanded ? AppTheme.colors.primary.withOpacity(0.1) : null,
+          border: Border(
+            bottom: BorderSide(color: Colors.grey[300]!),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              getCategoryIcon(),
+              color: AppTheme.colors.primary,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              category,
+              style: AppTheme.typography.label.copyWith(
+                fontWeight: FontWeight.bold,
+                color: isExpanded ? AppTheme.colors.primary : Colors.black87,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              isExpanded ? Icons.expand_more : Icons.chevron_right,
+              color: AppTheme.colors.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiagramSubcategorySection(String category, String subcategory) {
+    final isExpanded = _selectedDiagramSubcategory == subcategory;
+    
+    return Column(
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() {
+              if (isExpanded) {
+                _selectedDiagramSubcategory = '';
+              } else {
+                _selectedDiagramSubcategory = subcategory;
+              }
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
+            color: isExpanded
+                ? AppTheme.colors.secondary.withOpacity(0.1)
+                : Colors.grey[50],
+            child: Row(
+              children: [
+                Icon(
+                  isExpanded ? Icons.expand_more : Icons.chevron_right,
+                  size: 20,
+                  color: AppTheme.colors.secondary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  subcategory,
+                  style: AppTheme.typography.paragraph.copyWith(
+                    fontSize: 16,
+                    fontWeight: isExpanded ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (isExpanded) ...[
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              children: [
+                for (final template in DiagramTemplateLibrary.getTemplatesBySubcategory(
+                  category,
+                  subcategory,
+                ))
+                  _buildDiagramTemplateCard(template),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDiagramTemplateCard(DiagramTemplate template) {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: () => _insertDiagramTemplate(template),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    template.icon,
+                    color: AppTheme.colors.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      template.name,
+                      style: AppTheme.typography.paragraph.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                template.description,
+                style: AppTheme.typography.paragraph.copyWith(
+                  fontSize: 13,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.layers,
+                    size: 14,
+                    color: Colors.grey[500],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${template.shapes.length} elementos',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.add_circle,
+                    color: AppTheme.colors.primary,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Insere um template de diagrama no canvas
+  void _insertDiagramTemplate(DiagramTemplate template) {
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+
+    // Calcula o centro da viewport (considerando zoom e pan)
+    final viewportSize = box.size;
+    final viewportCenter = viewportSize.center(Offset.zero);
+    
+    // Converte para coordenadas do canvas (considerando zoom e pan)
+    final canvasCenter = (viewportCenter - _pan) / _zoom;
+
+    setState(() {
+      // Limpa a seleção atual
+      _selected.clear();
+      _selectedShapeIndex = -1;
+      
+      // Índice inicial das novas formas
+      final startIndex = _shapes.length;
+      
+      // Para cada forma no template
+      for (final templateShape in template.shapes) {
+        // Converte posição relativa (-1 a 1) para posição absoluta no canvas
+        // Usamos um espaço de 200px como referência para o diagrama
+        final diagramSpacing = 200.0;
+        final absoluteX = canvasCenter.dx + (templateShape.relativeX * diagramSpacing);
+        final absoluteY = canvasCenter.dy + (templateShape.relativeY * diagramSpacing);
+        
+        // Cria e adiciona a forma
+        _shapes.add(
+          _PlacedShape(
+            asset: templateShape.asset,
+            position: Offset(absoluteX - templateShape.size / 2, absoluteY - templateShape.size / 2),
+            size: templateShape.size,
+            rotation: templateShape.rotation,
+            textContent: templateShape.textContent,
+            fontSize: templateShape.fontSize,
+            customName: templateShape.customName,
+          ),
+        );
+      }
+      
+      // Seleciona automaticamente todas as formas recém-adicionadas
+      final endIndex = _shapes.length;
+      for (int i = startIndex; i < endIndex; i++) {
+        _selected.add(i);
+      }
+      
+      // Se houver apenas uma forma, define como seleção principal
+      if (template.shapes.length == 1) {
+        _selectedShapeIndex = startIndex;
+      }
+    });
   }
 
   // ===== Properties Panel =====
