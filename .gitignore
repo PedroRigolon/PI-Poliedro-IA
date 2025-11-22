@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Environment variables (IMPORTANTE - NÃO COMITAR)
+.env
+.env.local
+.env.*.local
+
+# Backend server
+/server/build/

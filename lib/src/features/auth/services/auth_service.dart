@@ -1,50 +1,135 @@
+import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 
 class AuthService {
-  // TODO: Implementar integração com MongoDB
+  static const String baseUrl = 'http://localhost:8080/api/auth';
+  final Dio _dio = Dio();
+
   Future<UserModel> login(String email, String password) async {
-    // Simular delay de rede
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final response = await _dio.post(
+        '$baseUrl/login',
+        data: {
+          'email': email,
+          'password': password,
+        },
+      );
 
-    // TODO: Implementar validação real com MongoDB
-    if (!_isValidEmail(email)) {
-      throw Exception('Email inválido');
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final token = data['token'] as String;
+        final userType = data['user']['type'] as String;
+
+        // Salva token localmente
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_token', token);
+        await prefs.setString('user_email', email);
+        await prefs.setString('user_type', userType);
+
+        return UserModel(
+          email: email,
+          type: _parseUserType(userType),
+        );
+      } else {
+        throw Exception('Erro ao fazer login');
+      }
+    } on DioException catch (e) {
+      if (e.response != null) {
+        final error = e.response!.data['error'] ?? 'Erro ao fazer login';
+        throw Exception(error);
+      }
+      throw Exception('Erro de conexão com o servidor');
     }
-
-    // Simulação de resposta
-    return UserModel(
-      email: email,
-      type: email.contains('@sistemapoliedro.com.br')
-          ? UserType.professor
-          : UserType.student,
-    );
   }
 
   Future<UserModel> register(String email, String password) async {
-    // Simular delay de rede
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final response = await _dio.post(
+        '$baseUrl/register',
+        data: {
+          'email': email,
+          'password': password,
+        },
+      );
 
-    // TODO: Implementar registro real com MongoDB
-    if (!_isValidEmail(email)) {
-      throw Exception('Email inválido');
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final token = data['token'] as String;
+        final userType = data['user']['type'] as String;
+
+        // Salva token localmente
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_token', token);
+        await prefs.setString('user_email', email);
+        await prefs.setString('user_type', userType);
+
+        return UserModel(
+          email: email,
+          type: _parseUserType(userType),
+        );
+      } else {
+        throw Exception('Erro ao cadastrar usuário');
+      }
+    } on DioException catch (e) {
+      if (e.response != null) {
+        final error = e.response!.data['error'] ?? 'Erro ao cadastrar usuário';
+        throw Exception(error);
+      }
+      throw Exception('Erro de conexão com o servidor');
     }
-
-    // Simulação de registro
-    return UserModel(
-      email: email,
-      type: email.contains('@sistemapoliedro.com.br')
-          ? UserType.professor
-          : UserType.student,
-    );
-  }
-
-  bool _isValidEmail(String email) {
-    return email.contains('@sistemapoliedro.com.br') ||
-        email.contains('@p4ed.com');
   }
 
   Future<void> logout() async {
-    // TODO: Implementar logout real (limpar token, etc)
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      if (token != null) {
+        await _dio.post(
+          '$baseUrl/logout',
+          options: Options(
+            headers: {'Authorization': 'Bearer $token'},
+          ),
+        );
+      }
+
+      // Limpa dados locais
+      await prefs.remove('auth_token');
+      await prefs.remove('user_email');
+      await prefs.remove('user_type');
+    } catch (e) {
+      // Mesmo com erro, limpa dados locais
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    }
+  }
+
+  Future<UserModel?> getCurrentUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('user_email');
+    final userType = prefs.getString('user_type');
+
+    if (email != null && userType != null) {
+      return UserModel(
+        email: email,
+        type: _parseUserType(userType),
+      );
+    }
+
+    return null;
+  }
+
+  UserType _parseUserType(String type) {
+    switch (type) {
+      case 'professor':
+        return UserType.professor;
+      case 'student':
+        return UserType.student;
+      case 'admin':
+        return UserType.admin;
+      default:
+        return UserType.student;
+    }
   }
 }

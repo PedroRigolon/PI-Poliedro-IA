@@ -9,7 +9,7 @@ class UserModel {
     return UserModel(
       email: json['email'] as String,
       name: json['name'] as String?,
-      type: json['type'] == 'professor' ? UserType.professor : UserType.student,
+      type: _parseUserType(json['type'] as String),
     );
   }
 
@@ -17,9 +17,22 @@ class UserModel {
     return {
       'email': email,
       'name': name,
-      'type': type == UserType.professor ? 'professor' : 'student',
+      'type': type.name,
     };
+  }
+
+  static UserType _parseUserType(String type) {
+    switch (type) {
+      case 'professor':
+        return UserType.professor;
+      case 'student':
+        return UserType.student;
+      case 'admin':
+        return UserType.admin;
+      default:
+        return UserType.student;
+    }
   }
 }
 
-enum UserType { professor, student }
+enum UserType { professor, student, admin }

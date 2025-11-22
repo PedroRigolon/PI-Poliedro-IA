@@ -172,7 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Estado do painel de Assistente de Diagramas
   String _selectedDiagramCategory = '';
   String _selectedDiagramSubcategory = '';
-  
+
   // Marquee selection
   bool _isMarquee = false;
   Offset? _marqueeStart;
@@ -425,11 +425,25 @@ class _HomeScreenState extends State<HomeScreen> {
                           final isDown = event is KeyDownEvent;
                           final isUp = event is KeyUpEvent;
                           final key = event.logicalKey;
-                          if (key == LogicalKeyboardKey.shiftLeft || key == LogicalKeyboardKey.shiftRight || key == LogicalKeyboardKey.shift) {
-                            setState(() { _shiftHeld = isDown ? true : (isUp ? false : _shiftHeld); });
+                          if (key == LogicalKeyboardKey.shiftLeft ||
+                              key == LogicalKeyboardKey.shiftRight ||
+                              key == LogicalKeyboardKey.shift) {
+                            setState(() {
+                              _shiftHeld = isDown
+                                  ? true
+                                  : (isUp ? false : _shiftHeld);
+                            });
                           }
-                          if (key == LogicalKeyboardKey.controlLeft || key == LogicalKeyboardKey.controlRight || key == LogicalKeyboardKey.control || key == LogicalKeyboardKey.metaLeft || key == LogicalKeyboardKey.metaRight) {
-                            setState(() { _ctrlHeld = isDown ? true : (isUp ? false : _ctrlHeld); });
+                          if (key == LogicalKeyboardKey.controlLeft ||
+                              key == LogicalKeyboardKey.controlRight ||
+                              key == LogicalKeyboardKey.control ||
+                              key == LogicalKeyboardKey.metaLeft ||
+                              key == LogicalKeyboardKey.metaRight) {
+                            setState(() {
+                              _ctrlHeld = isDown
+                                  ? true
+                                  : (isUp ? false : _ctrlHeld);
+                            });
                           }
                           // Não consome o evento para não atrapalhar Shortcuts/Actions
                           return KeyEventResult.ignored;
@@ -463,8 +477,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Listener(
                                   onPointerSignal: (event) {
                                     if (event is PointerScrollEvent) {
-                                      final ctrl = _ctrlHeld || _isCtrlPressed();
-                                      final shift = _shiftHeld || _isShiftPressed();
+                                      final ctrl =
+                                          _ctrlHeld || _isCtrlPressed();
+                                      final shift =
+                                          _shiftHeld || _isShiftPressed();
                                       final box =
                                           _canvasKey.currentContext
                                                   ?.findRenderObject()
@@ -620,9 +636,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                               children: [
                                                 Positioned.fill(
                                                   child: Container(
-                                                    color: _exportingTransparent ? Colors.transparent : Colors.white,
+                                                    color: _exportingTransparent
+                                                        ? Colors.transparent
+                                                        : Colors.white,
                                                     child: CustomPaint(
-                                                      painter: (_showGrid && !_suppressGridDuringCapture)
+                                                      painter:
+                                                          (_showGrid &&
+                                                              !_suppressGridDuringCapture)
                                                           ? CanvasGridPainter()
                                                           : null,
                                                     ),
@@ -725,7 +745,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.colors.primary,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                             ),
                           ),
                         ],
@@ -774,12 +797,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 260),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 20,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
-                              BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 12),
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 12,
+                              ),
                             ],
                           ),
                           child: Column(
@@ -787,7 +816,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               const CircularProgressIndicator(),
                               const SizedBox(height: 16),
-                              Text(_busyMessage ?? 'Processando...', textAlign: TextAlign.center),
+                              Text(
+                                _busyMessage ?? 'Processando...',
+                                textAlign: TextAlign.center,
+                              ),
                             ],
                           ),
                         ),
@@ -940,73 +972,51 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Grupo Geral
                   _buildMateriaHeaderCollapsible('Geral'),
                   if (_materiaExpanded['Geral'] ?? false) ...[
-                    _buildGeneratedSection(
-                      'Textos',
-                      [
-                        'generated:text',
-                      ],
-                    ),
-                    _buildGeneratedSection(
-                      'Setas',
-                      [
-                        'generated:vector',
-                      ],
-                    ),
-                    _buildGeneratedSection(
-                      'Formas Básicas',
-                      [
-                        'generated:rect',
-                        'generated:circle',
-                        'generated:triangle',
-                        'generated:line_solid',
-                        'generated:line_dashed',
-                      ],
-                    ),
+                    _buildGeneratedSection('Textos', ['generated:text']),
+                    _buildGeneratedSection('Setas', ['generated:vector']),
+                    _buildGeneratedSection('Formas Básicas', [
+                      'generated:rect',
+                      'generated:circle',
+                      'generated:triangle',
+                      'generated:line_solid',
+                      'generated:line_dashed',
+                    ]),
                   ],
                   const Divider(height: 24),
                   // Grupo Física
                   _buildMateriaHeaderCollapsible('Física'),
                   if (_materiaExpanded['Física'] ?? false) ...[
-                    _buildGeneratedSection(
-                      'Mecânica',
-                      [
-                        'generated:block',
-                        'generated:plane',
-                        'generated:pulley',
-                        'generated:spring',
-                        'generated:vector',
-                        'generated:pendulum',
-                        'generated:balance',
-                        'generated:cart',
-                        'generated:friction_surface',
-                        'generated:rope',
-                      ],
-                    ),
-                    _buildGeneratedSection(
-                      'Eletricidade',
-                      [
-                        'generated:resistor',
-                        'generated:battery',
-                        'generated:ammeter',
-                        'generated:wire',
-                        'generated:capacitor',
-                        'generated:led',
-                        'generated:diode',
-                        'generated:switch',
-                        'generated:ground',
-                        'generated:ac_source',
-                      ],
-                    ),
-                    _buildGeneratedSection(
-                      'Óptica',
-                      [
-                        'generated:convergent_lens',
-                        'generated:divergent_lens',
-                        'generated:mirror',
-                        'generated:light_ray',
-                        'generated:prism',
-                      ],
-                    ),
+                    _buildGeneratedSection('Mecânica', [
+                      'generated:block',
+                      'generated:plane',
+                      'generated:pulley',
+                      'generated:spring',
+                      'generated:vector',
+                      'generated:pendulum',
+                      'generated:balance',
+                      'generated:cart',
+                      'generated:friction_surface',
+                      'generated:rope',
+                    ]),
+                    _buildGeneratedSection('Eletricidade', [
+                      'generated:resistor',
+                      'generated:battery',
+                      'generated:ammeter',
+                      'generated:wire',
+                      'generated:capacitor',
+                      'generated:led',
+                      'generated:diode',
+                      'generated:switch',
+                      'generated:ground',
+                      'generated:ac_source',
+                    ]),
+                    _buildGeneratedSection('Óptica', [
+                      'generated:convergent_lens',
+                      'generated:divergent_lens',
+                      'generated:mirror',
+                      'generated:light_ray',
+                      'generated:prism',
+                    ]),
                     _buildSubSectionCollapsible(
                       'Térmica',
                       'assets/forms/fisica/termica',
@@ -1017,20 +1027,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Grupo Química
                   _buildMateriaHeaderCollapsible('Química'),
                   if (_materiaExpanded['Química'] ?? false) ...[
-                    _buildGeneratedSection(
-                      'Vidrarias',
-                      [
-                        'generated:beaker',
-                        'generated:erlenmeyer',
-                        'generated:test_tube',
-                      ],
-                    ),
-                    _buildGeneratedSection(
-                      'Orgânica',
-                      [
-                        'generated:benzene',
-                      ],
-                    ),
+                    _buildGeneratedSection('Vidrarias', [
+                      'generated:beaker',
+                      'generated:erlenmeyer',
+                      'generated:test_tube',
+                    ]),
+                    _buildGeneratedSection('Orgânica', ['generated:benzene']),
                     _buildSubSectionCollapsible(
                       'Inorgânica',
                       'assets/forms/quimica/inorganica',
@@ -1147,7 +1149,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final index = _shapes.indexOf(s); // índice real
         final isSel = _selected.contains(index) || index == _selectedShapeIndex;
         final displayName = _displayNameForShape(s);
-        
+
         return ListTile(
           key: ValueKey('layer_$index'),
           selected: isSel,
@@ -1160,9 +1162,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     border: Border.all(color: Colors.grey[300]!),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: CustomPaint(
-                    painter: _shapePainterForKey(s.asset),
-                  ),
+                  child: CustomPaint(painter: _shapePainterForKey(s.asset)),
                 )
               : Container(
                   width: 28,
@@ -1175,8 +1175,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Image.asset(
                     s.asset,
                     fit: BoxFit.contain,
-                    errorBuilder: (c, e, st) =>
-                        Icon(Icons.crop_square, size: 18, color: Colors.grey[400]),
+                    errorBuilder: (c, e, st) => Icon(
+                      Icons.crop_square,
+                      size: 18,
+                      color: Colors.grey[400],
+                    ),
                   ),
                 ),
           title: InkWell(
@@ -1457,9 +1460,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: SizedBox(
                           width: _shapeSize,
                           height: _shapeSize,
-                          child: CustomPaint(
-                            painter: _shapePainterForKey(k),
-                          ),
+                          child: CustomPaint(painter: _shapePainterForKey(k)),
                         ),
                       ),
                       childWhenDragging: Opacity(
@@ -1682,7 +1683,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 IconButton(
                   tooltip: 'Propriedades',
                   icon: const Icon(Icons.tune, size: 18),
-                  color: _selectedIndex == 3 ? AppTheme.colors.primary : Colors.black87,
+                  color: _selectedIndex == 3
+                      ? AppTheme.colors.primary
+                      : Colors.black87,
                   onPressed: () {
                     setState(() {
                       _selectedIndex = 3; // abre painel de propriedades
@@ -1733,7 +1736,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: _sendToBack,
                 ),
                 // Controles de texto (apenas se seleção for exatamente 1 texto)
-                if (_selected.length == 1 && _shapes[_selected.first].asset == 'generated:text') ...[
+                if (_selected.length == 1 &&
+                    _shapes[_selected.first].asset == 'generated:text') ...[
                   const VerticalDivider(width: 8),
                   _smallRoundButton(
                     icon: Icons.remove,
@@ -1748,7 +1752,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Text('${(_shapes[_selected.first].fontSize ?? 16).round()}'),
+                    child: Text(
+                      '${(_shapes[_selected.first].fontSize ?? 16).round()}',
+                    ),
                   ),
                   _smallRoundButton(
                     icon: Icons.add,
@@ -1947,15 +1953,17 @@ class _HomeScreenState extends State<HomeScreen> {
       final cosA = math.cos(s.rotation);
       final sinA = math.sin(s.rotation);
       // 4 cantos relativos ao centro
-      final corners = <Offset>[
-        Offset(-h, -h),
-        Offset(h, -h),
-        Offset(h, h),
-        Offset(-h, h),
-      ].map((p) => Offset(
-            cosA * p.dx - sinA * p.dy,
-            sinA * p.dx + cosA * p.dy,
-          ) + c);
+      final corners =
+          <Offset>[
+            Offset(-h, -h),
+            Offset(h, -h),
+            Offset(h, h),
+            Offset(-h, h),
+          ].map(
+            (p) =>
+                Offset(cosA * p.dx - sinA * p.dy, sinA * p.dx + cosA * p.dy) +
+                c,
+          );
       for (final p in corners) {
         if (p.dx < minX) minX = p.dx;
         if (p.dy < minY) minY = p.dy;
@@ -1966,8 +1974,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!minX.isFinite || !minY.isFinite || !maxX.isFinite || !maxY.isFinite) {
       return null;
     }
-    final rect = Rect.fromLTRB(minX, minY, maxX, maxY)
-        .inflate(padding);
+    final rect = Rect.fromLTRB(minX, minY, maxX, maxY).inflate(padding);
     return rect;
   }
 
@@ -1989,320 +1996,350 @@ class _HomeScreenState extends State<HomeScreen> {
           child: MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () {
-              if (_interactingWithHandle) return;
-              final keys = HardwareKeyboard.instance.logicalKeysPressed;
-              final ctrl =
-                  keys.contains(LogicalKeyboardKey.controlLeft) ||
-                  keys.contains(LogicalKeyboardKey.controlRight) ||
-                  keys.contains(LogicalKeyboardKey.metaLeft) ||
-                  keys.contains(LogicalKeyboardKey.metaRight);
-              setState(() {
-                if (ctrl) {
-                  if (_selected.contains(index)) {
-                    _selected.remove(index);
-                  } else {
-                    _selected.add(index);
-                  }
-                  _selectedShapeIndex = _selected.isNotEmpty
-                      ? _selected.last
-                      : -1;
-                } else {
-                  _selected.clear();
-                  if (s.groupId != null) {
-                    for (int i = 0; i < _shapes.length; i++) {
-                      if (_shapes[i].groupId == s.groupId) {
-                        _selected.add(i);
-                      }
-                    }
-                    _selectedShapeIndex = index;
-                  } else {
-                    _selected.add(index);
-                    _selectedShapeIndex = index;
-                  }
-                }
-              });
-              _canvasFocusNode.requestFocus();
-            },
-            onPanStart: (_) {
-              if (_interactingWithHandle) return;
-              setState(() {
-                final moved = _shapes.removeAt(index);
-                _shapes.add(moved);
-                final newIndex = _shapes.length - 1;
-                if (_selected.contains(index)) {
-                  _selected.remove(index);
-                  _selected.add(newIndex);
-                } else {
-                  _selected.clear();
-                  _selected.add(newIndex);
-                }
-                _selectedShapeIndex = newIndex;
-              });
-            },
-            onPanUpdate: (details) {
-              if (_interactingWithHandle) return;
-              if (_selected.contains(index)) {
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                if (_interactingWithHandle) return;
+                final keys = HardwareKeyboard.instance.logicalKeysPressed;
+                final ctrl =
+                    keys.contains(LogicalKeyboardKey.controlLeft) ||
+                    keys.contains(LogicalKeyboardKey.controlRight) ||
+                    keys.contains(LogicalKeyboardKey.metaLeft) ||
+                    keys.contains(LogicalKeyboardKey.metaRight);
                 setState(() {
-                  final delta = details.delta / _zoom;
-                  for (final sel in _selected) {
-                    final shp = _shapes[sel];
-                    if (shp.locked) continue;
-                    shp.position += delta;
-                    final renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-                    if (renderBox != null) {
-                      final sizeCanvas = renderBox.size;
-                      final maxX = sizeCanvas.width - shp.size;
-                      final maxY = sizeCanvas.height - shp.size;
-                      shp.position = Offset(
-                        shp.position.dx.clamp(0.0, maxX),
-                        shp.position.dy.clamp(0.0, maxY),
-                      );
+                  if (ctrl) {
+                    if (_selected.contains(index)) {
+                      _selected.remove(index);
+                    } else {
+                      _selected.add(index);
+                    }
+                    _selectedShapeIndex = _selected.isNotEmpty
+                        ? _selected.last
+                        : -1;
+                  } else {
+                    _selected.clear();
+                    if (s.groupId != null) {
+                      for (int i = 0; i < _shapes.length; i++) {
+                        if (_shapes[i].groupId == s.groupId) {
+                          _selected.add(i);
+                        }
+                      }
+                      _selectedShapeIndex = index;
+                    } else {
+                      _selected.add(index);
+                      _selectedShapeIndex = index;
                     }
                   }
                 });
-              }
-            },
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  left: outerPad,
-                  top: outerPad,
-                  width: s.size,
-                  height: s.size,
-                  child: Transform.rotate(
-                    angle: s.rotation,
-                    child: Container(
-                      decoration: (isSelected && s.asset != 'generated:text')
-                          ? BoxDecoration(
-                              border: Border.all(
-                                color: AppTheme.colors.primary,
-                                width: 1.2,
-                              ),
-                              borderRadius: BorderRadius.circular(4),
-                            )
-                          : null,
-                      padding: EdgeInsets.all(isSelected ? 2 : 0),
-                      child: s.asset.startsWith('generated:')
-                          ? CustomPaint(
-                              painter: s.asset == 'generated:text'
-                                  ? _TextShapePainter(
-                                      text: s.textContent ?? 'Texto',
-                                      fontSize: s.fontSize ?? 16,
-                                    )
-                                  : _shapePainterForKey(s.asset),
-                              size: Size.infinite,
-                            )
-                          : Image.asset(
-                              s.asset,
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stack) => Icon(
-                                Icons.crop_square,
-                                size: s.size * 0.6,
-                                color: Colors.grey[400],
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-                if (isSelected) ...[
+                _canvasFocusNode.requestFocus();
+              },
+              onPanStart: (_) {
+                if (_interactingWithHandle) return;
+                setState(() {
+                  final moved = _shapes.removeAt(index);
+                  _shapes.add(moved);
+                  final newIndex = _shapes.length - 1;
+                  if (_selected.contains(index)) {
+                    _selected.remove(index);
+                    _selected.add(newIndex);
+                  } else {
+                    _selected.clear();
+                    _selected.add(newIndex);
+                  }
+                  _selectedShapeIndex = newIndex;
+                });
+              },
+              onPanUpdate: (details) {
+                if (_interactingWithHandle) return;
+                if (_selected.contains(index)) {
+                  setState(() {
+                    final delta = details.delta / _zoom;
+                    for (final sel in _selected) {
+                      final shp = _shapes[sel];
+                      if (shp.locked) continue;
+                      shp.position += delta;
+                      final renderBox =
+                          _canvasKey.currentContext?.findRenderObject()
+                              as RenderBox?;
+                      if (renderBox != null) {
+                        final sizeCanvas = renderBox.size;
+                        final maxX = sizeCanvas.width - shp.size;
+                        final maxY = sizeCanvas.height - shp.size;
+                        shp.position = Offset(
+                          shp.position.dx.clamp(0.0, maxX),
+                          shp.position.dy.clamp(0.0, maxY),
+                        );
+                      }
+                    }
+                  });
+                }
+              },
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
                   Positioned(
-                    top: outerPad - (handleSize + 10),
-                    right: outerPad - (handleSize / 2),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapDown: (_) => _interactingWithHandle = true,
-                      onTapCancel: () => _interactingWithHandle = false,
-                      onTapUp: (_) => _interactingWithHandle = false,
-                      onTap: () {
-                        setState(() {
-                          final toRemove = _selected.isNotEmpty
-                              ? _selected.toList()
-                              : [index];
-                          toRemove.sort((a, b) => b.compareTo(a));
-                          for (final i in toRemove) {
-                            _shapes.removeAt(i);
-                          }
-                          _selected.clear();
-                          _selectedShapeIndex = -1;
-                        });
-                      },
+                    left: outerPad,
+                    top: outerPad,
+                    width: s.size,
+                    height: s.size,
+                    child: Transform.rotate(
+                      angle: s.rotation,
                       child: Container(
-                        width: handleSize + 10,
-                        height: handleSize + 10,
-                        decoration: const BoxDecoration(
-                          color: Colors.redAccent,
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.close,
-                          size: 14,
-                          color: Colors.white,
-                        ),
+                        decoration: (isSelected && s.asset != 'generated:text')
+                            ? BoxDecoration(
+                                border: Border.all(
+                                  color: AppTheme.colors.primary,
+                                  width: 1.2,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              )
+                            : null,
+                        padding: EdgeInsets.all(isSelected ? 2 : 0),
+                        child: s.asset.startsWith('generated:')
+                            ? CustomPaint(
+                                painter: s.asset == 'generated:text'
+                                    ? _TextShapePainter(
+                                        text: s.textContent ?? 'Texto',
+                                        fontSize: s.fontSize ?? 16,
+                                      )
+                                    : _shapePainterForKey(s.asset),
+                                size: Size.infinite,
+                              )
+                            : Image.asset(
+                                s.asset,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stack) => Icon(
+                                  Icons.crop_square,
+                                  size: s.size * 0.6,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
                       ),
                     ),
                   ),
-                  Positioned(
-                    top: outerPad - (handleSize + 12),
-                    left: outerPad - (handleSize / 2),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onPanStart: (details) {
-                        _interactingWithHandle = true;
-                        _rotatingShapeIndex = index;
-                        _rotatingInitialRotation = s.rotation;
-                        final center = s.position + Offset(s.size / 2, s.size / 2);
-                        final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-                        if (box != null) {
-                          final local = box.globalToLocal(details.globalPosition);
-                          final canvasPoint = _widgetToCanvas(local);
-                          final vector = canvasPoint - center;
-                          _rotatingInitialAngle = math.atan2(vector.dy, vector.dx);
-                        } else {
-                          _rotatingInitialAngle = 0.0;
-                        }
-                      },
-                      onPanDown: (_) => _interactingWithHandle = true,
-                      onPanCancel: () { _interactingWithHandle = false; _rotatingShapeIndex = null; },
-                      onPanEnd: (_) { _interactingWithHandle = false; _rotatingShapeIndex = null; },
-                      onPanUpdate: (details) {
-                        setState(() {
-                          final center = s.position + Offset(s.size / 2, s.size / 2);
-                          final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+                  if (isSelected) ...[
+                    Positioned(
+                      top: outerPad - (handleSize + 10),
+                      right: outerPad - (handleSize / 2),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (_) => _interactingWithHandle = true,
+                        onTapCancel: () => _interactingWithHandle = false,
+                        onTapUp: (_) => _interactingWithHandle = false,
+                        onTap: () {
+                          setState(() {
+                            final toRemove = _selected.isNotEmpty
+                                ? _selected.toList()
+                                : [index];
+                            toRemove.sort((a, b) => b.compareTo(a));
+                            for (final i in toRemove) {
+                              _shapes.removeAt(i);
+                            }
+                            _selected.clear();
+                            _selectedShapeIndex = -1;
+                          });
+                        },
+                        child: Container(
+                          width: handleSize + 10,
+                          height: handleSize + 10,
+                          decoration: const BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.close,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: outerPad - (handleSize + 12),
+                      left: outerPad - (handleSize / 2),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanStart: (details) {
+                          _interactingWithHandle = true;
+                          _rotatingShapeIndex = index;
+                          _rotatingInitialRotation = s.rotation;
+                          final center =
+                              s.position + Offset(s.size / 2, s.size / 2);
+                          final box =
+                              _canvasKey.currentContext?.findRenderObject()
+                                  as RenderBox?;
                           if (box != null) {
-                            final local = box.globalToLocal(details.globalPosition);
+                            final local = box.globalToLocal(
+                              details.globalPosition,
+                            );
                             final canvasPoint = _widgetToCanvas(local);
                             final vector = canvasPoint - center;
-                            final currentAngle = math.atan2(vector.dy, vector.dx);
-                            if (_rotatingShapeIndex == index) {
-                              final delta = currentAngle - _rotatingInitialAngle;
-                              s.rotation = _rotatingInitialRotation + delta;
-                            } else {
-                              s.rotation = currentAngle;
-                            }
+                            _rotatingInitialAngle = math.atan2(
+                              vector.dy,
+                              vector.dx,
+                            );
+                          } else {
+                            _rotatingInitialAngle = 0.0;
                           }
-                        });
-                      },
-                      child: Container(
-                        width: handleSize + 10,
-                        height: handleSize + 10,
-                        decoration: BoxDecoration(
-                          color: AppTheme.colors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.rotate_right,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: outerPad - (handleSize / 2),
-                    right: outerPad - (handleSize / 2),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onPanDown: (_) => _interactingWithHandle = true,
-                      onPanCancel: () => _interactingWithHandle = false,
-                      onPanEnd: (_) => _interactingWithHandle = false,
-                      onPanUpdate: (details) {
-                        setState(() {
-                          final keys =
-                              HardwareKeyboard.instance.logicalKeysPressed;
-                          final keepProportion =
-                              keys.contains(LogicalKeyboardKey.shiftLeft) ||
-                              keys.contains(LogicalKeyboardKey.shiftRight);
-                          if (_selected.length <= 1) {
-                            final rawDelta = keepProportion
-                                ? (details.delta.dx.abs() >=
-                                          details.delta.dy.abs()
-                                      ? details.delta.dx
-                                      : details.delta.dy)
-                                : details.delta.dx;
-                            double newSize = s.size + rawDelta / _zoom;
-                            newSize = newSize.clamp(24.0, 320.0);
-                            final renderBox =
+                        },
+                        onPanDown: (_) => _interactingWithHandle = true,
+                        onPanCancel: () {
+                          _interactingWithHandle = false;
+                          _rotatingShapeIndex = null;
+                        },
+                        onPanEnd: (_) {
+                          _interactingWithHandle = false;
+                          _rotatingShapeIndex = null;
+                        },
+                        onPanUpdate: (details) {
+                          setState(() {
+                            final center =
+                                s.position + Offset(s.size / 2, s.size / 2);
+                            final box =
                                 _canvasKey.currentContext?.findRenderObject()
                                     as RenderBox?;
-                            if (renderBox != null) {
-                              final sizeCanvas = renderBox.size;
-                              if (s.position.dx + newSize > sizeCanvas.width) {
-                                newSize = sizeCanvas.width - s.position.dx;
+                            if (box != null) {
+                              final local = box.globalToLocal(
+                                details.globalPosition,
+                              );
+                              final canvasPoint = _widgetToCanvas(local);
+                              final vector = canvasPoint - center;
+                              final currentAngle = math.atan2(
+                                vector.dy,
+                                vector.dx,
+                              );
+                              if (_rotatingShapeIndex == index) {
+                                final delta =
+                                    currentAngle - _rotatingInitialAngle;
+                                s.rotation = _rotatingInitialRotation + delta;
+                              } else {
+                                s.rotation = currentAngle;
                               }
-                              if (s.position.dy + newSize > sizeCanvas.height) {
-                                newSize = sizeCanvas.height - s.position.dy;
-                              }
                             }
-                            if (keepProportion) {
-                              newSize = (newSize / 8).round() * 8;
-                            }
-                            s.size = newSize;
-                          } else {
-                            final bounds = _selectionBounds();
-                            if (bounds == null) return;
-                            final anchor = bounds.topLeft;
-                            final cur = bounds.bottomRight;
-                            final newBR = cur + details.delta / _zoom;
-                            final newW = (newBR.dx - anchor.dx).clamp(
-                              24.0,
-                              double.infinity,
-                            );
-                            final newH = (newBR.dy - anchor.dy).clamp(
-                              24.0,
-                              double.infinity,
-                            );
-                            final sx = newW / bounds.width;
-                            final sy = newH / bounds.height;
-                            final scale = keepProportion
-                                ? math.min(sx, sy)
-                                : math.min(sx, sy);
-                            final center = bounds.center;
-                            for (final idx in _selected) {
-                              final shp = _shapes[idx];
-                              if (shp.locked) continue;
-                              final rel =
-                                  shp.position +
-                                  Offset(shp.size / 2, shp.size / 2) -
-                                  center;
-                              final relScaled = rel * scale;
-                              shp.size = (shp.size * scale).clamp(16.0, 640.0);
-                              shp.position =
-                                  center +
-                                  relScaled -
-                                  Offset(shp.size / 2, shp.size / 2);
-                            }
-                          }
-                        });
-                      },
-                      child: Container(
-                        width: handleSize + 10,
-                        height: handleSize + 10,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(
+                          });
+                        },
+                        child: Container(
+                          width: handleSize + 10,
+                          height: handleSize + 10,
+                          decoration: BoxDecoration(
                             color: AppTheme.colors.primary,
-                            width: 1.2,
+                            shape: BoxShape.circle,
                           ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.open_in_full,
-                          size: 14,
-                          color: Colors.black87,
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.rotate_right,
+                            size: 14,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    Positioned(
+                      bottom: outerPad - (handleSize / 2),
+                      right: outerPad - (handleSize / 2),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanDown: (_) => _interactingWithHandle = true,
+                        onPanCancel: () => _interactingWithHandle = false,
+                        onPanEnd: (_) => _interactingWithHandle = false,
+                        onPanUpdate: (details) {
+                          setState(() {
+                            final keys =
+                                HardwareKeyboard.instance.logicalKeysPressed;
+                            final keepProportion =
+                                keys.contains(LogicalKeyboardKey.shiftLeft) ||
+                                keys.contains(LogicalKeyboardKey.shiftRight);
+                            if (_selected.length <= 1) {
+                              final rawDelta = keepProportion
+                                  ? (details.delta.dx.abs() >=
+                                            details.delta.dy.abs()
+                                        ? details.delta.dx
+                                        : details.delta.dy)
+                                  : details.delta.dx;
+                              double newSize = s.size + rawDelta / _zoom;
+                              newSize = newSize.clamp(24.0, 320.0);
+                              final renderBox =
+                                  _canvasKey.currentContext?.findRenderObject()
+                                      as RenderBox?;
+                              if (renderBox != null) {
+                                final sizeCanvas = renderBox.size;
+                                if (s.position.dx + newSize >
+                                    sizeCanvas.width) {
+                                  newSize = sizeCanvas.width - s.position.dx;
+                                }
+                                if (s.position.dy + newSize >
+                                    sizeCanvas.height) {
+                                  newSize = sizeCanvas.height - s.position.dy;
+                                }
+                              }
+                              if (keepProportion) {
+                                newSize = (newSize / 8).round() * 8;
+                              }
+                              s.size = newSize;
+                            } else {
+                              final bounds = _selectionBounds();
+                              if (bounds == null) return;
+                              final anchor = bounds.topLeft;
+                              final cur = bounds.bottomRight;
+                              final newBR = cur + details.delta / _zoom;
+                              final newW = (newBR.dx - anchor.dx).clamp(
+                                24.0,
+                                double.infinity,
+                              );
+                              final newH = (newBR.dy - anchor.dy).clamp(
+                                24.0,
+                                double.infinity,
+                              );
+                              final sx = newW / bounds.width;
+                              final sy = newH / bounds.height;
+                              final scale = keepProportion
+                                  ? math.min(sx, sy)
+                                  : math.min(sx, sy);
+                              final center = bounds.center;
+                              for (final idx in _selected) {
+                                final shp = _shapes[idx];
+                                if (shp.locked) continue;
+                                final rel =
+                                    shp.position +
+                                    Offset(shp.size / 2, shp.size / 2) -
+                                    center;
+                                final relScaled = rel * scale;
+                                shp.size = (shp.size * scale).clamp(
+                                  16.0,
+                                  640.0,
+                                );
+                                shp.position =
+                                    center +
+                                    relScaled -
+                                    Offset(shp.size / 2, shp.size / 2);
+                              }
+                            }
+                          });
+                        },
+                        child: Container(
+                          width: handleSize + 10,
+                          height: handleSize + 10,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(
+                              color: AppTheme.colors.primary,
+                              width: 1.2,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.open_in_full,
+                            size: 14,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
           ),
         ),
       );
@@ -2399,7 +2436,6 @@ class _HomeScreenState extends State<HomeScreen> {
         false;
   }
 
-
   // ===== IA Panel =====
   Widget _buildIaPanel() {
     final categories = DiagramTemplateLibrary.getCategories();
@@ -2421,7 +2457,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         SizedBox(height: AppTheme.spacing.medium),
-        
+
         // Lista de categorias e subcategorias
         Expanded(
           child: ListView(
@@ -2429,7 +2465,8 @@ class _HomeScreenState extends State<HomeScreen> {
               for (final category in categories) ...[
                 _buildDiagramCategoryHeader(category),
                 if (_selectedDiagramCategory == category) ...[
-                  for (final subcategory in DiagramTemplateLibrary.getSubcategories(category))
+                  for (final subcategory
+                      in DiagramTemplateLibrary.getSubcategories(category))
                     _buildDiagramSubcategorySection(category, subcategory),
                 ],
               ],
@@ -2442,7 +2479,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDiagramCategoryHeader(String category) {
     final isExpanded = _selectedDiagramCategory == category;
-    
+
     // Ícones por categoria
     IconData getCategoryIcon() {
       switch (category) {
@@ -2456,7 +2493,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return Icons.folder;
       }
     }
-    
+
     return InkWell(
       onTap: () {
         setState(() {
@@ -2473,17 +2510,11 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
           color: isExpanded ? AppTheme.colors.primary.withOpacity(0.1) : null,
-          border: Border(
-            bottom: BorderSide(color: Colors.grey[300]!),
-          ),
+          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
         ),
         child: Row(
           children: [
-            Icon(
-              getCategoryIcon(),
-              color: AppTheme.colors.primary,
-              size: 22,
-            ),
+            Icon(getCategoryIcon(), color: AppTheme.colors.primary, size: 22),
             const SizedBox(width: 12),
             Text(
               category,
@@ -2505,7 +2536,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDiagramSubcategorySection(String category, String subcategory) {
     final isExpanded = _selectedDiagramSubcategory == subcategory;
-    
+
     return Column(
       children: [
         InkWell(
@@ -2535,7 +2566,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   subcategory,
                   style: AppTheme.typography.paragraph.copyWith(
                     fontSize: 16,
-                    fontWeight: isExpanded ? FontWeight.bold : FontWeight.normal,
+                    fontWeight: isExpanded
+                        ? FontWeight.bold
+                        : FontWeight.normal,
                   ),
                 ),
               ],
@@ -2548,10 +2581,11 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.all(8),
             child: Column(
               children: [
-                for (final template in DiagramTemplateLibrary.getTemplatesBySubcategory(
-                  category,
-                  subcategory,
-                ))
+                for (final template
+                    in DiagramTemplateLibrary.getTemplatesBySubcategory(
+                      category,
+                      subcategory,
+                    ))
                   _buildDiagramTemplateCard(template),
               ],
             ),
@@ -2574,11 +2608,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Row(
                 children: [
-                  Icon(
-                    template.icon,
-                    color: AppTheme.colors.primary,
-                    size: 20,
-                  ),
+                  Icon(template.icon, color: AppTheme.colors.primary, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -2602,18 +2632,11 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(
-                    Icons.layers,
-                    size: 14,
-                    color: Colors.grey[500],
-                  ),
+                  Icon(Icons.layers, size: 14, color: Colors.grey[500]),
                   const SizedBox(width: 4),
                   Text(
                     '${template.shapes.length} elementos',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   const Spacer(),
                   Icon(
@@ -2638,7 +2661,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Calcula o centro da viewport (considerando zoom e pan)
     final viewportSize = box.size;
     final viewportCenter = viewportSize.center(Offset.zero);
-    
+
     // Converte para coordenadas do canvas (considerando zoom e pan)
     final canvasCenter = (viewportCenter - _pan) / _zoom;
 
@@ -2646,23 +2669,28 @@ class _HomeScreenState extends State<HomeScreen> {
       // Limpa a seleção atual
       _selected.clear();
       _selectedShapeIndex = -1;
-      
+
       // Índice inicial das novas formas
       final startIndex = _shapes.length;
-      
+
       // Para cada forma no template
       for (final templateShape in template.shapes) {
         // Converte posição relativa (-1 a 1) para posição absoluta no canvas
         // Usamos um espaço de 200px como referência para o diagrama
         final diagramSpacing = 200.0;
-        final absoluteX = canvasCenter.dx + (templateShape.relativeX * diagramSpacing);
-        final absoluteY = canvasCenter.dy + (templateShape.relativeY * diagramSpacing);
-        
+        final absoluteX =
+            canvasCenter.dx + (templateShape.relativeX * diagramSpacing);
+        final absoluteY =
+            canvasCenter.dy + (templateShape.relativeY * diagramSpacing);
+
         // Cria e adiciona a forma
         _shapes.add(
           _PlacedShape(
             asset: templateShape.asset,
-            position: Offset(absoluteX - templateShape.size / 2, absoluteY - templateShape.size / 2),
+            position: Offset(
+              absoluteX - templateShape.size / 2,
+              absoluteY - templateShape.size / 2,
+            ),
             size: templateShape.size,
             rotation: templateShape.rotation,
             textContent: templateShape.textContent,
@@ -2671,13 +2699,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       }
-      
+
       // Seleciona automaticamente todas as formas recém-adicionadas
       final endIndex = _shapes.length;
       for (int i = startIndex; i < endIndex; i++) {
         _selected.add(i);
       }
-      
+
       // Se houver apenas uma forma, define como seleção principal
       if (template.shapes.length == 1) {
         _selectedShapeIndex = startIndex;
@@ -2729,7 +2757,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         _getCommonValue((s) => s.size),
                         (v) {
                           setState(() {
-                            _updateSelectedShapes((s) => s.size = v.clamp(16.0, 640.0));
+                            _updateSelectedShapes(
+                              (s) => s.size = v.clamp(16.0, 640.0),
+                            );
                           });
                         },
                       ),
@@ -2741,20 +2771,28 @@ class _HomeScreenState extends State<HomeScreen> {
                         _getCommonValue((s) => s.rotation * 180 / math.pi),
                         (v) {
                           setState(() {
-                            _updateSelectedShapes((s) => s.rotation = v * math.pi / 180);
+                            _updateSelectedShapes(
+                              (s) => s.rotation = v * math.pi / 180,
+                            );
                           });
                         },
                         suffix: '°',
                       ),
                       const SizedBox(height: 8),
                       Slider(
-                        value: (_getCommonValue((s) => s.rotation) ?? 0.0) * 180 / math.pi,
+                        value:
+                            (_getCommonValue((s) => s.rotation) ?? 0.0) *
+                            180 /
+                            math.pi,
                         min: -180,
                         max: 180,
                         divisions: 72,
-                        label: '${((_getCommonValue((s) => s.rotation) ?? 0.0) * 180 / math.pi).toStringAsFixed(0)}°',
+                        label:
+                            '${((_getCommonValue((s) => s.rotation) ?? 0.0) * 180 / math.pi).toStringAsFixed(0)}°',
                         onChanged: (v) => setState(() {
-                          _updateSelectedShapes((s) => s.rotation = v * math.pi / 180);
+                          _updateSelectedShapes(
+                            (s) => s.rotation = v * math.pi / 180,
+                          );
                         }),
                       ),
                     ]),
@@ -2778,11 +2816,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ]),
                     // Propriedades específicas de texto
-                    if (_selected.length == 1 && _shapes[_selected.first].asset == 'generated:text') ...[
+                    if (_selected.length == 1 &&
+                        _shapes[_selected.first].asset == 'generated:text') ...[
                       const Divider(height: 24),
                       _buildPropertySection('Texto', [
                         TextFormField(
-                          initialValue: _shapes[_selected.first].textContent ?? 'Texto',
+                          initialValue:
+                              _shapes[_selected.first].textContent ?? 'Texto',
                           decoration: const InputDecoration(
                             labelText: 'Conteúdo',
                             border: OutlineInputBorder(),
@@ -2820,7 +2860,10 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Text(
           title,
-          style: AppTheme.typography.title.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+          style: AppTheme.typography.title.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 8),
         ...children,
@@ -2886,18 +2929,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ===== Export helpers =====
-  Future<Uint8List?> _captureCanvasPng({required double pixelRatio, required bool transparent}) async {
-    final boundary = _canvasKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+  Future<Uint8List?> _captureCanvasPng({
+    required double pixelRatio,
+    required bool transparent,
+  }) async {
+    final boundary =
+        _canvasKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
     if (boundary == null) return null;
     // Alterna background para transparente se necessário
     final prev = _exportingTransparent;
     if (transparent != prev) {
-      setState(() { _exportingTransparent = transparent; });
+      setState(() {
+        _exportingTransparent = transparent;
+      });
       await WidgetsBinding.instance.endOfFrame;
     }
     // Esconde grade se estiver ativa
     final prevSuppress = _suppressGridDuringCapture;
-    setState(() { _suppressGridDuringCapture = true; });
+    setState(() {
+      _suppressGridDuringCapture = true;
+    });
     await WidgetsBinding.instance.endOfFrame;
     try {
       final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
@@ -2905,23 +2956,34 @@ class _HomeScreenState extends State<HomeScreen> {
       final bytes = byteData?.buffer.asUint8List();
       // Restaura estado
       if (transparent != prev) {
-        setState(() { _exportingTransparent = prev; });
+        setState(() {
+          _exportingTransparent = prev;
+        });
         await WidgetsBinding.instance.endOfFrame;
       }
-      setState(() { _suppressGridDuringCapture = prevSuppress; });
+      setState(() {
+        _suppressGridDuringCapture = prevSuppress;
+      });
       return bytes;
     } catch (_) {
       if (transparent != prev) {
-        setState(() { _exportingTransparent = prev; });
+        setState(() {
+          _exportingTransparent = prev;
+        });
       }
-      setState(() { _suppressGridDuringCapture = prevSuppress; });
+      setState(() {
+        _suppressGridDuringCapture = prevSuppress;
+      });
       return null;
     }
   }
 
   Future<void> _exportPng({required int dpi, required bool transparent}) async {
     final ratio = dpi / 72.0; // base aproximada
-    final bytes = await _captureCroppedContentPng(pixelRatio: ratio, transparent: transparent);
+    final bytes = await _captureCroppedContentPng(
+      pixelRatio: ratio,
+      transparent: transparent,
+    );
     if (bytes == null) return;
     await FileSaver.instance.saveFile(
       name: 'canvas_${dpi}dpi',
@@ -2934,16 +2996,22 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _exportSvg() async {
     final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return;
-    final contentRect = _visibleContentBoundsCanvas(padding: 24) ?? Rect.fromLTWH(0, 0, box.size.width, box.size.height);
+    final contentRect =
+        _visibleContentBoundsCanvas(padding: 24) ??
+        Rect.fromLTWH(0, 0, box.size.width, box.size.height);
     final size = Size(contentRect.width, contentRect.height);
     // Cache base64 por asset
     final Map<String, String> base64ByAsset = {};
     for (final s in _shapes.where((s) => s.visible)) {
-      base64ByAsset[s.asset] ??= base64Encode((await rootBundle.load(s.asset)).buffer.asUint8List());
+      base64ByAsset[s.asset] ??= base64Encode(
+        (await rootBundle.load(s.asset)).buffer.asUint8List(),
+      );
     }
     final buffer = StringBuffer();
     buffer.writeln('<?xml version="1.0" encoding="UTF-8"?>');
-    buffer.writeln('<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">');
+    buffer.writeln(
+      '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">',
+    );
     // Background branco (opcional); manter transparente por padrão
     for (final s in _shapes.where((s) => s.visible)) {
       final cx = (s.position.dx - contentRect.left) + s.size / 2;
@@ -2953,7 +3021,9 @@ class _HomeScreenState extends State<HomeScreen> {
       buffer.writeln('<g transform="rotate($deg $cx $cy)">');
       final adjX = s.position.dx - contentRect.left;
       final adjY = s.position.dy - contentRect.top;
-      buffer.writeln('<image href="data:image/png;base64,$b64" x="$adjX" y="$adjY" width="${s.size}" height="${s.size}" />');
+      buffer.writeln(
+        '<image href="data:image/png;base64,$b64" x="$adjX" y="$adjY" width="${s.size}" height="${s.size}" />',
+      );
       buffer.writeln('</g>');
     }
     buffer.writeln('</svg>');
@@ -2969,7 +3039,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _exportPdf({int dpi = 300}) async {
     // Mitigação de travamento + recorte ao conteúdo
-    final png = await _captureCroppedContentPng(pixelRatio: 2.0, transparent: false);
+    final png = await _captureCroppedContentPng(
+      pixelRatio: 2.0,
+      transparent: false,
+    );
     if (png == null) return;
     final doc = pw.Document();
     final image = pw.MemoryImage(png);
@@ -2978,10 +3051,7 @@ class _HomeScreenState extends State<HomeScreen> {
         pageFormat: PdfPageFormat.a4,
         build: (context) {
           return pw.Center(
-            child: pw.FittedBox(
-              child: pw.Image(image),
-              fit: pw.BoxFit.contain,
-            ),
+            child: pw.FittedBox(child: pw.Image(image), fit: pw.BoxFit.contain),
           );
         },
       ),
@@ -2997,36 +3067,44 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ===== Fluxo de Salvar Imagem =====
   Future<void> _saveImageFlow() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Deseja salvar esta imagem?'),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.pinkAccent,
-                shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-              child: const Text('Sim'),
-            ),
-            OutlinedButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.pinkAccent,
-                side: const BorderSide(color: Colors.pinkAccent),
-                shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-              child: const Text('Não'),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
+    final confirm =
+        await showDialog<bool>(
+          context: context,
+          builder: (ctx) {
+            return AlertDialog(
+              title: const Text('Deseja salvar esta imagem?'),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.pinkAccent,
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                  ),
+                  child: const Text('Sim'),
+                ),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.pinkAccent,
+                    side: const BorderSide(color: Colors.pinkAccent),
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                  ),
+                  child: const Text('Não'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
     if (!confirm) return;
     // Mostra overlay primeiro (setState) e depois realiza captura assíncrona
     if (mounted) {
@@ -3049,19 +3127,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _captureContentPreview({double pixelRatio = 2.0}) async {
-    final boundary = _canvasKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    final boundary =
+        _canvasKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
     if (boundary == null) return;
     final contentRectCanvas = _visibleContentBoundsCanvas(padding: 24);
     if (contentRectCanvas == null) {
-      _lastPreviewBytes = await _captureCanvasPng(pixelRatio: pixelRatio, transparent: false);
+      _lastPreviewBytes = await _captureCanvasPng(
+        pixelRatio: pixelRatio,
+        transparent: false,
+      );
       return;
     }
-    final cropped = await _captureCroppedContentPng(pixelRatio: pixelRatio, transparent: false);
+    final cropped = await _captureCroppedContentPng(
+      pixelRatio: pixelRatio,
+      transparent: false,
+    );
     _lastPreviewBytes = cropped;
   }
 
-  Future<Uint8List?> _captureCroppedContentPng({required double pixelRatio, required bool transparent}) async {
-    final fullBytes = await _captureCanvasPng(pixelRatio: pixelRatio, transparent: transparent);
+  Future<Uint8List?> _captureCroppedContentPng({
+    required double pixelRatio,
+    required bool transparent,
+  }) async {
+    final fullBytes = await _captureCanvasPng(
+      pixelRatio: pixelRatio,
+      transparent: transparent,
+    );
     if (fullBytes == null) return null;
     final contentRectCanvas = _visibleContentBoundsCanvas(padding: 24);
     if (contentRectCanvas == null) return fullBytes;
@@ -3112,8 +3203,13 @@ class _HomeScreenState extends State<HomeScreen> {
       barrierDismissible: true,
       builder: (ctx) {
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
             child: Padding(
@@ -3134,13 +3230,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: AspectRatio(
-                      aspectRatio: 5/4,
+                      aspectRatio: 5 / 4,
                       child: Container(
                         color: Colors.grey[300],
                         alignment: Alignment.center,
                         child: _lastPreviewBytes == null
                             ? const SizedBox.shrink()
-                            : Image.memory(_lastPreviewBytes!, fit: BoxFit.contain),
+                            : Image.memory(
+                                _lastPreviewBytes!,
+                                fit: BoxFit.contain,
+                              ),
                       ),
                     ),
                   ),
@@ -3156,7 +3255,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.pinkAccent,
                           shape: const StadiumBorder(),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 10,
+                          ),
                         ),
                         child: const Text('Baixar'),
                       ),
@@ -3170,7 +3272,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               foregroundColor: Colors.pinkAccent,
                               side: const BorderSide(color: Colors.pinkAccent),
                               shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -3180,7 +3285,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               foregroundColor: Colors.pinkAccent,
                               side: const BorderSide(color: Colors.pinkAccent),
                               shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
                             ),
                             child: const Text('Visualizar'),
                           ),
@@ -3218,15 +3326,15 @@ class _HomeScreenState extends State<HomeScreen> {
             'groupId': s.groupId,
             if (s.textContent != null) 'text': s.textContent,
             if (s.fontSize != null) 'fontSize': s.fontSize,
-          }
+          },
       ],
     };
     list.add(jsonEncode(composition));
     await prefs.setStringList('collection', list);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Salvo na coleção')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Salvo na coleção')));
     }
   }
 
@@ -3266,88 +3374,115 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setSt) {
-          return AlertDialog(
-            title: const Text('Exportar'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Formato'),
-                const SizedBox(height: 6),
-                Wrap(spacing: 16, runSpacing: 12, children: [
-                  ChoiceChip(
-                    label: const Text('PNG'),
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    selected: format == 'PNG',
-                    onSelected: (_) => setSt(() => format = 'PNG'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('SVG'),
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    selected: format == 'SVG',
-                    onSelected: (_) => setSt(() => format = 'SVG'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('PDF'),
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    selected: format == 'PDF',
-                    onSelected: (_) => setSt(() => format = 'PDF'),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                if (format == 'PNG') ...[
-                  const Text('Opções PNG'),
+        return StatefulBuilder(
+          builder: (ctx, setSt) {
+            return AlertDialog(
+              title: const Text('Exportar'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Formato'),
                   const SizedBox(height: 6),
-                  DropdownButton<int>(
-                    value: selectedDpi,
-                    items: const [72, 150, 300]
-                        .map((e) => DropdownMenuItem(value: e, child: Text('${e} DPI')))
-                        .toList(),
-                    onChanged: (v) => setSt(() => selectedDpi = v ?? selectedDpi),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('PNG'),
+                        labelPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        selected: format == 'PNG',
+                        onSelected: (_) => setSt(() => format = 'PNG'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('SVG'),
+                        labelPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        selected: format == 'SVG',
+                        onSelected: (_) => setSt(() => format = 'SVG'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('PDF'),
+                        labelPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        selected: format == 'PDF',
+                        onSelected: (_) => setSt(() => format = 'PDF'),
+                      ),
+                    ],
                   ),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: transparent,
-                    onChanged: (v) => setSt(() => transparent = v ?? false),
-                    title: const Text('Fundo transparente'),
-                  ),
+                  const SizedBox(height: 16),
+                  if (format == 'PNG') ...[
+                    const Text('Opções PNG'),
+                    const SizedBox(height: 6),
+                    DropdownButton<int>(
+                      value: selectedDpi,
+                      items: const [72, 150, 300]
+                          .map(
+                            (e) => DropdownMenuItem(
+                              value: e,
+                              child: Text('${e} DPI'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) =>
+                          setSt(() => selectedDpi = v ?? selectedDpi),
+                    ),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: transparent,
+                      onChanged: (v) => setSt(() => transparent = v ?? false),
+                      title: const Text('Fundo transparente'),
+                    ),
+                  ],
                 ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.download),
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    if (format == 'PNG') {
+                      await _runWithLoading('Exportando PNG...', () async {
+                        await _exportPng(
+                          dpi: selectedDpi,
+                          transparent: transparent,
+                        );
+                      });
+                    } else if (format == 'SVG') {
+                      await _runWithLoading('Exportando SVG...', () async {
+                        await _exportSvg();
+                      });
+                    } else {
+                      await _runWithLoading('Exportando PDF...', () async {
+                        await _exportPdf(dpi: 300);
+                      });
+                    }
+                  },
+                  label: const Text('Exportar'),
+                ),
               ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.download),
-                onPressed: () async {
-                  Navigator.of(ctx).pop();
-                  if (format == 'PNG') {
-                    await _runWithLoading('Exportando PNG...', () async {
-                      await _exportPng(dpi: selectedDpi, transparent: transparent);
-                    });
-                  } else if (format == 'SVG') {
-                    await _runWithLoading('Exportando SVG...', () async {
-                      await _exportSvg();
-                    });
-                  } else {
-                    await _runWithLoading('Exportando PDF...', () async {
-                      await _exportPdf(dpi: 300);
-                    });
-                  }
-                },
-                label: const Text('Exportar'),
-              ),
-            ],
-          );
-        });
+            );
+          },
+        );
       },
     );
   }
 
-  Future<T?> _runWithLoading<T>(String message, Future<T> Function() action) async {
+  Future<T?> _runWithLoading<T>(
+    String message,
+    Future<T> Function() action,
+  ) async {
     if (mounted) {
       setState(() {
         _isBusy = true;
@@ -3368,7 +3503,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Botão pequeno redondo para controles de texto
-  Widget _smallRoundButton({required IconData icon, required VoidCallback onTap}) {
+  Widget _smallRoundButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -3402,7 +3540,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Editar texto'),
-            content: TextField(
+          content: TextField(
             controller: controller,
             maxLines: 4,
             decoration: const InputDecoration(hintText: 'Digite...'),
@@ -3433,7 +3571,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final s = _shapes[index];
     final currentName = s.customName ?? _displayNameForShape(s);
     final controller = TextEditingController(text: currentName);
-    
+
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) {
@@ -3469,7 +3607,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
-    
+
     if (result != null && result.isNotEmpty) {
       setState(() {
         s.customName = result;
@@ -3482,7 +3620,11 @@ class _HomeScreenState extends State<HomeScreen> {
       text: s.textContent ?? 'Texto',
       style: TextStyle(fontSize: s.fontSize ?? 16),
     );
-    final tp = TextPainter(text: span, textDirection: TextDirection.ltr, maxLines: 10)..layout();
+    final tp = TextPainter(
+      text: span,
+      textDirection: TextDirection.ltr,
+      maxLines: 10,
+    )..layout();
     final needed = math.max(tp.width, tp.height) + 12;
     s.size = needed.clamp(24.0, 640.0);
   }
@@ -3502,46 +3644,82 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _displayNameForKey(String key) {
     switch (key) {
-      case 'rect': return 'Retângulo';
-      case 'circle': return 'Círculo';
-      case 'triangle': return 'Triângulo';
-      case 'line_solid': return 'Linha';
-      case 'line_dashed': return 'Linha Tracejada';
-      case 'block': return 'Bloco';
-      case 'plane': return 'Plano Inclinado';
-      case 'pulley': return 'Polia';
-      case 'spring': return 'Mola';
-      case 'vector': return 'Vetor';
-      case 'resistor': return 'Resistor';
-      case 'battery': return 'Bateria';
-      case 'ammeter': return 'Amperímetro';
-      case 'wire': return 'Fio';
-      case 'text': return 'Texto';
+      case 'rect':
+        return 'Retângulo';
+      case 'circle':
+        return 'Círculo';
+      case 'triangle':
+        return 'Triângulo';
+      case 'line_solid':
+        return 'Linha';
+      case 'line_dashed':
+        return 'Linha Tracejada';
+      case 'block':
+        return 'Bloco';
+      case 'plane':
+        return 'Plano Inclinado';
+      case 'pulley':
+        return 'Polia';
+      case 'spring':
+        return 'Mola';
+      case 'vector':
+        return 'Vetor';
+      case 'resistor':
+        return 'Resistor';
+      case 'battery':
+        return 'Bateria';
+      case 'ammeter':
+        return 'Amperímetro';
+      case 'wire':
+        return 'Fio';
+      case 'text':
+        return 'Texto';
       // Circuitos expandidos
-      case 'capacitor': return 'Capacitor';
-      case 'led': return 'LED';
-      case 'diode': return 'Diodo';
-      case 'switch': return 'Interruptor';
-      case 'ground': return 'Terra';
-      case 'ac_source': return 'Fonte AC';
+      case 'capacitor':
+        return 'Capacitor';
+      case 'led':
+        return 'LED';
+      case 'diode':
+        return 'Diodo';
+      case 'switch':
+        return 'Interruptor';
+      case 'ground':
+        return 'Terra';
+      case 'ac_source':
+        return 'Fonte AC';
       // Mecânica expandida
-      case 'pendulum': return 'Pêndulo';
-      case 'balance': return 'Balança';
-      case 'cart': return 'Carrinho';
-      case 'friction_surface': return 'Superfície com Atrito';
-      case 'rope': return 'Corda';
+      case 'pendulum':
+        return 'Pêndulo';
+      case 'balance':
+        return 'Balança';
+      case 'cart':
+        return 'Carrinho';
+      case 'friction_surface':
+        return 'Superfície com Atrito';
+      case 'rope':
+        return 'Corda';
       // Óptica
-      case 'convergent_lens': return 'Lente Convergente';
-      case 'divergent_lens': return 'Lente Divergente';
-      case 'mirror': return 'Espelho';
-      case 'light_ray': return 'Raio de Luz';
-      case 'prism': return 'Prisma';
+      case 'convergent_lens':
+        return 'Lente Convergente';
+      case 'divergent_lens':
+        return 'Lente Divergente';
+      case 'mirror':
+        return 'Espelho';
+      case 'light_ray':
+        return 'Raio de Luz';
+      case 'prism':
+        return 'Prisma';
       // Química
-      case 'beaker': return 'Béquer';
-      case 'erlenmeyer': return 'Erlenmeyer';
-      case 'test_tube': return 'Tubo de Ensaio';
-      case 'benzene': return 'Benzeno';
-      default: return 'Forma';
+      case 'beaker':
+        return 'Béquer';
+      case 'erlenmeyer':
+        return 'Erlenmeyer';
+      case 'test_tube':
+        return 'Tubo de Ensaio';
+      case 'benzene':
+        return 'Benzeno';
+      default:
+        return 'Forma';
     }
   }
 
@@ -3552,7 +3730,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return 'Forma';
   }
-
 }
 
 // Pintor do retângulo de seleção (marquee)
@@ -3594,6 +3771,7 @@ class _RectPainter extends CustomPainter {
       paint,
     );
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3605,12 +3783,9 @@ class _CirclePainter extends CustomPainter {
       ..color = Colors.black
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    canvas.drawCircle(
-      size.center(Offset.zero),
-      size.shortestSide / 2,
-      paint,
-    );
+    canvas.drawCircle(size.center(Offset.zero), size.shortestSide / 2, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3619,7 +3794,7 @@ class _TrianglePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path()
-      ..moveTo(size.width/2, 0)
+      ..moveTo(size.width / 2, 0)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
@@ -3629,6 +3804,7 @@ class _TrianglePainter extends CustomPainter {
       ..strokeWidth = 2;
     canvas.drawPath(path, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3643,12 +3819,16 @@ class _LinePainter extends CustomPainter {
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
     if (!dashed) {
-      canvas.drawLine(Offset(0, size.height/2), Offset(size.width, size.height/2), paint);
+      canvas.drawLine(
+        Offset(0, size.height / 2),
+        Offset(size.width, size.height / 2),
+        paint,
+      );
     } else {
       const dashWidth = 8.0;
       const dashSpace = 6.0;
       double x = 0;
-      final y = size.height/2;
+      final y = size.height / 2;
       while (x < size.width) {
         final x2 = math.min(x + dashWidth, size.width);
         canvas.drawLine(Offset(x, y), Offset(x2, y), paint);
@@ -3656,8 +3836,10 @@ class _LinePainter extends CustomPainter {
       }
     }
   }
+
   @override
-  bool shouldRepaint(covariant _LinePainter oldDelegate) => oldDelegate.dashed != dashed;
+  bool shouldRepaint(covariant _LinePainter oldDelegate) =>
+      oldDelegate.dashed != dashed;
 }
 
 class _BlockPainter extends CustomPainter {
@@ -3670,6 +3852,7 @@ class _BlockPainter extends CustomPainter {
     final r = Rect.fromLTWH(1, 1, size.width - 2, size.height - 2);
     canvas.drawRect(r, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3685,6 +3868,7 @@ class _InclinedPlanePainter extends CustomPainter {
     final paint = Paint()..color = Colors.grey.shade400;
     canvas.drawPath(path, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3695,9 +3879,10 @@ class _PulleyPainter extends CustomPainter {
     final outer = Paint()..color = Colors.grey.shade300;
     final inner = Paint()..color = Colors.grey.shade600;
     final center = size.center(Offset.zero);
-    canvas.drawCircle(center, size.shortestSide/2, outer);
-    canvas.drawCircle(center, size.shortestSide/4, inner);
+    canvas.drawCircle(center, size.shortestSide / 2, outer);
+    canvas.drawCircle(center, size.shortestSide / 4, inner);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3716,11 +3901,15 @@ class _SpringPainter extends CustomPainter {
     for (int i = 0; i <= turns; i++) {
       final t = i / turns;
       final x = t * w;
-      final y = (math.sin(t * math.pi * 2) * h/2 * 0.5) + h/2;
-      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+      final y = (math.sin(t * math.pi * 2) * h / 2 * 0.5) + h / 2;
+      if (i == 0)
+        path.moveTo(x, y);
+      else
+        path.lineTo(x, y);
     }
     canvas.drawPath(path, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3751,6 +3940,7 @@ class _ForceVectorPainter extends CustomPainter {
       );
     canvas.drawPath(path, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3781,6 +3971,7 @@ class _ResistorPainter extends CustomPainter {
     path.lineTo(size.width, midY);
     canvas.drawPath(path, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3807,8 +3998,13 @@ class _BatteryPainter extends CustomPainter {
       paint,
     );
     canvas.drawLine(Offset(0, midY), Offset(centerX - 10, midY), paint);
-    canvas.drawLine(Offset(centerX + 10, midY), Offset(size.width, midY), paint);
+    canvas.drawLine(
+      Offset(centerX + 10, midY),
+      Offset(size.width, midY),
+      paint,
+    );
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3834,8 +4030,9 @@ class _AmmeterPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    tp.paint(canvas, c - Offset(tp.width/2, tp.height/2));
+    tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3847,8 +4044,13 @@ class _WirePainter extends CustomPainter {
       ..color = Colors.black
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(0, size.height/2), Offset(size.width, size.height/2), paint);
+    canvas.drawLine(
+      Offset(0, size.height / 2),
+      Offset(size.width, size.height / 2),
+      paint,
+    );
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3863,10 +4065,7 @@ class _TextShapePainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
-        style: TextStyle(
-          fontSize: fontSize,
-          color: Colors.black,
-        ),
+        style: TextStyle(fontSize: fontSize, color: Colors.black),
       ),
       maxLines: 10,
       textDirection: TextDirection.ltr,
@@ -3876,6 +4075,7 @@ class _TextShapePainter extends CustomPainter {
       size.center(Offset.zero) - Offset(tp.width / 2, tp.height / 2),
     );
   }
+
   @override
   bool shouldRepaint(covariant _TextShapePainter oldDelegate) =>
       oldDelegate.text != text || oldDelegate.fontSize != fontSize;
@@ -3909,6 +4109,7 @@ class _CapacitorPainter extends CustomPainter {
     canvas.drawLine(Offset(0, midY), Offset(centerX - 4, midY), paint);
     canvas.drawLine(Offset(centerX + 4, midY), Offset(size.width, midY), paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3937,7 +4138,11 @@ class _LEDPainter extends CustomPainter {
     );
     // Fios
     canvas.drawLine(Offset(0, centerY), Offset(centerX - 8, centerY), paint);
-    canvas.drawLine(Offset(centerX + 6, centerY), Offset(size.width, centerY), paint);
+    canvas.drawLine(
+      Offset(centerX + 6, centerY),
+      Offset(size.width, centerY),
+      paint,
+    );
     // Setas de luz
     final arrowPaint = Paint()
       ..color = Colors.amber[700]!
@@ -3946,9 +4151,18 @@ class _LEDPainter extends CustomPainter {
     final arrow1Start = Offset(centerX + 12, centerY - 8);
     final arrow1End = Offset(centerX + 18, centerY - 14);
     canvas.drawLine(arrow1Start, arrow1End, arrowPaint);
-    canvas.drawLine(arrow1End, Offset(arrow1End.dx - 3, arrow1End.dy + 2), arrowPaint);
-    canvas.drawLine(arrow1End, Offset(arrow1End.dx - 2, arrow1End.dy + 3), arrowPaint);
+    canvas.drawLine(
+      arrow1End,
+      Offset(arrow1End.dx - 3, arrow1End.dy + 2),
+      arrowPaint,
+    );
+    canvas.drawLine(
+      arrow1End,
+      Offset(arrow1End.dx - 2, arrow1End.dy + 3),
+      arrowPaint,
+    );
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3977,8 +4191,13 @@ class _DiodePainter extends CustomPainter {
     );
     // Fios
     canvas.drawLine(Offset(0, centerY), Offset(centerX - 8, centerY), paint);
-    canvas.drawLine(Offset(centerX + 6, centerY), Offset(size.width, centerY), paint);
+    canvas.drawLine(
+      Offset(centerX + 6, centerY),
+      Offset(size.width, centerY),
+      paint,
+    );
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -3997,15 +4216,12 @@ class _SwitchPainter extends CustomPainter {
     canvas.drawCircle(Offset(leftX, midY), 2, Paint()..color = Colors.black);
     canvas.drawCircle(Offset(rightX, midY), 2, Paint()..color = Colors.black);
     // Alavanca (aberta)
-    canvas.drawLine(
-      Offset(leftX, midY),
-      Offset(rightX - 5, midY - 12),
-      paint,
-    );
+    canvas.drawLine(Offset(leftX, midY), Offset(rightX - 5, midY - 12), paint);
     // Fios
     canvas.drawLine(Offset(0, midY), Offset(leftX, midY), paint);
     canvas.drawLine(Offset(rightX, midY), Offset(size.width, midY), paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4021,12 +4237,29 @@ class _GroundPainter extends CustomPainter {
     final topY = size.height * 0.2;
     final bottomY = size.height * 0.8;
     // Linha vertical
-    canvas.drawLine(Offset(centerX, topY), Offset(centerX, bottomY - 15), paint);
+    canvas.drawLine(
+      Offset(centerX, topY),
+      Offset(centerX, bottomY - 15),
+      paint,
+    );
     // Três linhas horizontais (símbolo terra)
-    canvas.drawLine(Offset(centerX - 12, bottomY - 15), Offset(centerX + 12, bottomY - 15), paint);
-    canvas.drawLine(Offset(centerX - 8, bottomY - 10), Offset(centerX + 8, bottomY - 10), paint);
-    canvas.drawLine(Offset(centerX - 4, bottomY - 5), Offset(centerX + 4, bottomY - 5), paint);
+    canvas.drawLine(
+      Offset(centerX - 12, bottomY - 15),
+      Offset(centerX + 12, bottomY - 15),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(centerX - 8, bottomY - 10),
+      Offset(centerX + 8, bottomY - 10),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(centerX - 4, bottomY - 5),
+      Offset(centerX + 4, bottomY - 5),
+      paint,
+    );
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4053,10 +4286,14 @@ class _ACSourcePainter extends CustomPainter {
       final t = i / points;
       final x = center.dx - radius * 0.6 + t * radius * 1.2;
       final y = center.dy + math.sin(t * math.pi * 4) * radius * 0.3;
-      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+      if (i == 0)
+        path.moveTo(x, y);
+      else
+        path.lineTo(x, y);
     }
     canvas.drawPath(path, wavePaint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4085,6 +4322,7 @@ class _PendulumPainter extends CustomPainter {
     canvas.drawCircle(Offset(bobX, bobY), 8, bobPaint);
     canvas.drawCircle(Offset(bobX, bobY), 8, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4131,6 +4369,7 @@ class _BalancePainter extends CustomPainter {
     canvas.drawRect(leftPlate, paint..strokeWidth = 1);
     canvas.drawRect(rightPlate, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4162,6 +4401,7 @@ class _CartPainter extends CustomPainter {
     canvas.drawCircle(leftWheel, 8, paint);
     canvas.drawCircle(rightWheel, 8, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4191,6 +4431,7 @@ class _FrictionSurfacePainter extends CustomPainter {
     }
     canvas.drawPath(path, zigzagPaint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4209,10 +4450,14 @@ class _RopePainter extends CustomPainter {
       final t = i / points;
       final x = t * size.width;
       final y = size.height / 2 + math.sin(t * math.pi * 3) * 3;
-      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+      if (i == 0)
+        path.moveTo(x, y);
+      else
+        path.lineTo(x, y);
     }
     canvas.drawPath(path, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4243,6 +4488,7 @@ class _ConvergentLensPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
     canvas.drawLine(Offset(0, h / 2), Offset(size.width, h / 2), axisPaint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4271,6 +4517,7 @@ class _DivergentLensPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
     canvas.drawLine(Offset(0, h / 2), Offset(size.width, h / 2), axisPaint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4307,6 +4554,7 @@ class _MirrorPainter extends CustomPainter {
       );
     canvas.drawPath(reflectivePath, reflectivePaint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4331,6 +4579,7 @@ class _LightRayPainter extends CustomPainter {
       ..close();
     canvas.drawPath(arrowPath, Paint()..color = Colors.yellow.shade700);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4354,6 +4603,7 @@ class _PrismPainter extends CustomPainter {
     canvas.drawPath(path, fillPaint);
     canvas.drawPath(path, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4393,6 +4643,7 @@ class _BeakerPainter extends CustomPainter {
       Paint()..color = Colors.blue.withValues(alpha: 0.2),
     );
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4415,6 +4666,7 @@ class _ErlenmeyerPainter extends CustomPainter {
       ..close();
     canvas.drawPath(path, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4445,6 +4697,7 @@ class _TestTubePainter extends CustomPainter {
       ..lineTo(size.width * 0.7, size.height * 0.05);
     canvas.drawPath(path, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -4464,13 +4717,17 @@ class _BenzenePainter extends CustomPainter {
       final angle = (i * 60 - 90) * math.pi / 180;
       final x = center.dx + radius * math.cos(angle);
       final y = center.dy + radius * math.sin(angle);
-      if (i == 0) hexPath.moveTo(x, y); else hexPath.lineTo(x, y);
+      if (i == 0)
+        hexPath.moveTo(x, y);
+      else
+        hexPath.lineTo(x, y);
     }
     hexPath.close();
     canvas.drawPath(hexPath, paint);
     // Círculo interno (ligações duplas)
     canvas.drawCircle(center, radius * 0.6, paint);
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

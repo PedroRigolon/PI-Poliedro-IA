@@ -71,15 +71,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                 hintStyle: TextStyle(color: Colors.grey[800]),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Colors.black12),
+                                  borderSide: const BorderSide(
+                                    color: Colors.black12,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Colors.black12),
+                                  borderSide: const BorderSide(
+                                    color: Colors.black12,
+                                  ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Colors.black26),
+                                  borderSide: const BorderSide(
+                                    color: Colors.black26,
+                                  ),
                                 ),
                               ),
                               validator: (value) {
@@ -112,15 +118,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                 hintStyle: TextStyle(color: Colors.grey[800]),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Colors.black12),
+                                  borderSide: const BorderSide(
+                                    color: Colors.black12,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Colors.black12),
+                                  borderSide: const BorderSide(
+                                    color: Colors.black12,
+                                  ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Colors.black26),
+                                  borderSide: const BorderSide(
+                                    color: Colors.black26,
+                                  ),
                                 ),
                               ),
                               obscureText: true,
