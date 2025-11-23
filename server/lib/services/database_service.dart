@@ -33,12 +33,21 @@ class DatabaseService {
     await usersCollection.insertOne(user);
   }
 
-  // Atualiza usuário
+  // Atualiza usuário com campos arbitrários
   Future<void> updateUser(String email, Map<String, dynamic> updates) async {
-    await usersCollection.update(
-      where.eq('email', email),
-      modify.set('updatedAt', DateTime.now().toIso8601String())
-          ..set('lastLogin', updates['lastLogin']),
-    );
+    final modifier = modify.set('updatedAt', DateTime.now().toIso8601String());
+    updates.forEach((key, value) {
+      if (value == null) {
+        modifier.unset(key);
+      } else {
+        modifier.set(key, value);
+      }
+    });
+
+    await usersCollection.updateOne(where.eq('email', email), modifier);
+  }
+
+  Future<void> deleteUser(String email) async {
+    await usersCollection.deleteOne(where.eq('email', email));
   }
 }

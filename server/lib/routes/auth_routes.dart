@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import '../services/database_service.dart';
@@ -18,6 +19,8 @@ class AuthRoutes {
     router.post('/register', _handleRegister);
     router.post('/login', _handleLogin);
     router.post('/logout', _handleLogout);
+    router.post('/change-password', _handleChangePassword);
+    router.delete('/account', _handleDeleteAccount);
 
     return router;
   }
@@ -85,8 +88,8 @@ class AuthRoutes {
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e, stackTrace) {
-      print('❌ Erro no registro: $e');
-      print('Stack trace: $stackTrace');
+      stderr.writeln('❌ Erro no registro: $e');
+      stderr.writeln('Stack trace: $stackTrace');
       return Response.internalServerError(
         body: json.encode({'error': 'Erro ao cadastrar usuário', 'details': e.toString()}),
         headers: {'Content-Type': 'application/json'},
@@ -143,8 +146,8 @@ class AuthRoutes {
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e, stackTrace) {
-      print('❌ Erro no login: $e');
-      print('Stack trace: $stackTrace');
+      stderr.writeln('❌ Erro no login: $e');
+      stderr.writeln('Stack trace: $stackTrace');
       return Response.internalServerError(
         body: json.encode({'error': 'Erro ao fazer login', 'details': e.toString()}),
         headers: {'Content-Type': 'application/json'},
@@ -159,5 +162,115 @@ class AuthRoutes {
       json.encode({'message': 'Logout realizado com sucesso'}),
       headers: {'Content-Type': 'application/json'},
     );
+  }
+
+  Future<Response> _handleChangePassword(Request request) async {
+    try {
+      final email = _getEmailFromRequest(request);
+      if (email == null) {
+        return _unauthorizedResponse();
+      }
+
+      final payload = json.decode(await request.readAsString());
+      final currentPassword = payload['currentPassword'] as String?;
+      final newPassword = payload['newPassword'] as String?;
+
+      if (currentPassword == null || currentPassword.isEmpty) {
+        return Response(400,
+            body: json.encode({'error': 'Senha atual é obrigatória'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      if (newPassword == null || newPassword.isEmpty) {
+        return Response(400,
+            body: json.encode({'error': 'Nova senha é obrigatória'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      if (newPassword.length < 6) {
+        return Response(400,
+            body: json.encode(
+                {'error': 'Nova senha deve ter no mínimo 6 caracteres'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      final user = await _dbService.findUserByEmail(email);
+      if (user == null) {
+        return Response(404,
+            body: json.encode({'error': 'Usuário não encontrado'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      final storedHash = user['password'] as String;
+      if (!_authService.verifyPassword(currentPassword, storedHash)) {
+        return Response(401,
+            body: json.encode({'error': 'Senha atual incorreta'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      final newHash = _authService.hashPassword(newPassword);
+      await _dbService.updateUser(email, {'password': newHash});
+
+      return Response.ok(
+        json.encode({'message': 'Senha atualizada com sucesso'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e, stackTrace) {
+      stderr.writeln('❌ Erro ao alterar senha: $e');
+      stderr.writeln('Stack trace: $stackTrace');
+      return Response.internalServerError(
+        body: json.encode(
+            {'error': 'Erro ao alterar senha', 'details': e.toString()}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> _handleDeleteAccount(Request request) async {
+    try {
+      final email = _getEmailFromRequest(request);
+      if (email == null) {
+        return _unauthorizedResponse();
+      }
+
+      final user = await _dbService.findUserByEmail(email);
+      if (user == null) {
+        return Response(404,
+            body: json.encode({'error': 'Usuário não encontrado'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      await _dbService.deleteUser(email);
+
+      return Response.ok(
+        json.encode({'message': 'Conta excluída com sucesso'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e, stackTrace) {
+      stderr.writeln('❌ Erro ao excluir conta: $e');
+      stderr.writeln('Stack trace: $stackTrace');
+      return Response.internalServerError(
+        body: json.encode(
+            {'error': 'Erro ao excluir conta', 'details': e.toString()}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  String? _getEmailFromRequest(Request request) {
+    final authHeader = request.headers['Authorization'];
+    if (authHeader == null || !authHeader.startsWith('Bearer ')) {
+      return null;
+    }
+    final token = authHeader.substring(7);
+    final payload = _authService.verifyToken(token);
+    if (payload == null) return null;
+    return payload['email'] as String?;
+  }
+
+  Response _unauthorizedResponse() {
+    return Response(401,
+        body: json.encode({'error': 'Não autorizado'}),
+        headers: {'Content-Type': 'application/json'});
   }
 }

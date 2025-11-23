@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 import 'dart:convert';
@@ -7,16 +6,17 @@ import 'package:flutter/rendering.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:file_saver/file_saver.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/gestures.dart';
-import 'dart:ui' show PointerDeviceKind;
 import 'dart:math' as math;
 import 'package:image/image.dart' as img;
 import 'package:flutter/foundation.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../auth/providers/auth_provider.dart';
+import '../../../widgets/app_navbar.dart';
 import '../models/diagram_template.dart';
+import '../../collection/models/canvas_snapshot.dart';
+import '../../history/providers/history_provider.dart';
 
 /// Simple grid painter for the empty canvas area.
 class CanvasGridPainter extends CustomPainter {
@@ -159,6 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _shiftHeld = false;
   bool _exportingTransparent = false;
   Uint8List? _lastPreviewBytes;
+  CanvasSnapshot? _loadedSnapshot;
   // Flag para esconder grade durante capturas / preview
   bool _suppressGridDuringCapture = false;
   // Estado de rotação durante interação
@@ -204,6 +205,22 @@ class _HomeScreenState extends State<HomeScreen> {
   void _toggleSub(String sub) =>
       setState(() => _subExpanded[sub] = !(_subExpanded[sub] ?? true));
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is CanvasSnapshot) {
+      if (_loadedSnapshot?.id != args.id) {
+        _loadedSnapshot = args;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _restoreFromSnapshot(args);
+          }
+        });
+      }
+    }
+  }
+
   bool _isCtrlPressed() {
     final keysH = HardwareKeyboard.instance.logicalKeysPressed;
     if (keysH.contains(LogicalKeyboardKey.controlLeft) ||
@@ -236,19 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.colors.background,
-      appBar: AppBar(
-        backgroundColor: AppTheme.colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: Image.asset('assets/images/logo.png', height: 40),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.account_circle),
-            onPressed: _showProfileMenu,
-          ),
-        ],
-      ),
+      appBar: const AppNavbar(),
       body: Row(
         children: [
           // Navigation rail
@@ -521,7 +526,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                   onPointerDown: (event) {
                                     // Botão do meio do mouse para pan estilo Figma
-                                    if (event.kind == PointerDeviceKind.mouse &&
+                                    if (event.kind == ui.PointerDeviceKind.mouse &&
                                         (event.buttons & 0x04) != 0) {
                                       setState(() {
                                         _isMiddlePanning = true;
@@ -532,7 +537,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                   onPointerMove: (event) {
                                     if (_isMiddlePanning &&
-                                        event.kind == PointerDeviceKind.mouse) {
+                                        event.kind == ui.PointerDeviceKind.mouse) {
                                       final last = _lastMiddlePanLocal;
                                       if (last != null) {
                                         final delta =
@@ -547,7 +552,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                   onPointerUp: (event) {
                                     if (_isMiddlePanning &&
-                                        event.kind == PointerDeviceKind.mouse) {
+                                        event.kind == ui.PointerDeviceKind.mouse) {
                                       setState(() {
                                         _isMiddlePanning = false;
                                         _lastMiddlePanLocal = null;
@@ -2346,96 +2351,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
   }
 
-  void _showProfileMenu() {
-    showMenu(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        MediaQuery.of(context).size.width,
-        kToolbarHeight,
-        0,
-        0,
-      ),
-      items: [
-        PopupMenuItem(
-          child: const Text('Configurações'),
-          onTap: () {
-            // Necessário post-frame para não conflitar com o menu
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) Navigator.pushNamed(context, '/settings');
-            });
-          },
-        ),
-        PopupMenuItem(
-          child: const Text('Coleção'),
-          onTap: () {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) Navigator.pushNamed(context, '/collection');
-            });
-          },
-        ),
-        PopupMenuItem(
-          child: const Text('Histórico'),
-          onTap: () {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) Navigator.pushNamed(context, '/history');
-            });
-          },
-        ),
-        PopupMenuItem(
-          enabled: false,
-          child: SizedBox(
-            width: 180,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.logout, size: 18),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.colors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              onPressed: () async {
-                Navigator.pop(context); // fechar menu antes do diálogo
-                final auth = context.read<AuthProvider>();
-                final confirm = await _confirmLogout();
-                if (confirm) {
-                  await auth.logout();
-                  if (mounted) {
-                    Navigator.pushReplacementNamed(context, '/login');
-                  }
-                }
-              },
-              label: const Text('Sair'),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<bool> _confirmLogout() async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (ctx) {
-            return AlertDialog(
-              title: const Text('Confirmar saída'),
-              content: const Text('Deseja realmente sair da conta?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.colors.primary,
-                  ),
-                  child: const Text('Sair'),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-  }
-
   // ===== IA Panel =====
   Widget _buildIaPanel() {
     final categories = DiagramTemplateLibrary.getCategories();
@@ -3265,9 +3180,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       Row(
                         children: [
                           OutlinedButton.icon(
-                            onPressed: _saveToCollection,
+                            onPressed: _saveSessionToHistory,
                             icon: const Icon(Icons.bookmark_border, size: 18),
-                            label: const Text('Salvar'),
+                            label: const Text('Salvar sessão'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.pinkAccent,
                               side: const BorderSide(color: Colors.pinkAccent),
@@ -3305,37 +3220,35 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _saveToCollection() async {
-    // Serializa composição simples (JSON) em SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList('collection') ?? <String>[];
-    final composition = {
-      'createdAt': DateTime.now().toIso8601String(),
-      'pan': {'x': _pan.dx, 'y': _pan.dy},
-      'zoom': _zoom,
-      'shapes': [
-        for (final s in _shapes)
-          {
-            'asset': s.asset,
-            'x': s.position.dx,
-            'y': s.position.dy,
-            'size': s.size,
-            'rotation': s.rotation,
-            'locked': s.locked,
-            'visible': s.visible,
-            'groupId': s.groupId,
-            if (s.textContent != null) 'text': s.textContent,
-            if (s.fontSize != null) 'fontSize': s.fontSize,
-          },
-      ],
-    };
-    list.add(jsonEncode(composition));
-    await prefs.setStringList('collection', list);
-    if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Salvo na coleção')));
+  Future<void> _saveSessionToHistory() async {
+    if (_lastPreviewBytes == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gere uma pré-visualização antes de salvar.')),
+      );
+      return;
     }
+
+    final snapshotPayload = _buildSnapshotPayload();
+    final now = DateTime.now();
+    final defaultTitle =
+        'Sessão ${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    final snapshot = CanvasSnapshot(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      createdAt: now,
+      title: defaultTitle,
+      stateJson: jsonEncode(snapshotPayload),
+      previewBase64: base64Encode(_lastPreviewBytes!),
+    );
+
+    final historyProvider = context.read<HistoryProvider>();
+    await historyProvider.add(snapshot);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sessão salva no histórico.')),
+    );
   }
 
   void _viewFullscreenPreview() {
@@ -3353,6 +3266,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Image.memory(_lastPreviewBytes!, fit: BoxFit.contain),
               ),
             ),
+
+
             Positioned(
               right: 8,
               top: 8,
@@ -3364,6 +3279,86 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Map<String, dynamic> _buildSnapshotPayload() {
+    return {
+      'createdAt': DateTime.now().toIso8601String(),
+      'pan': {'x': _pan.dx, 'y': _pan.dy},
+      'zoom': _zoom,
+      'shapes': [
+        for (final shape in _shapes)
+          {
+            'asset': shape.asset,
+            'x': shape.position.dx,
+            'y': shape.position.dy,
+            'size': shape.size,
+            'rotation': shape.rotation,
+            'locked': shape.locked,
+            'visible': shape.visible,
+            'groupId': shape.groupId,
+            if (shape.textContent != null) 'text': shape.textContent,
+            if (shape.fontSize != null) 'fontSize': shape.fontSize,
+            if (shape.customName != null) 'customName': shape.customName,
+          },
+      ],
+    };
+  }
+
+  void _restoreFromSnapshot(CanvasSnapshot snapshot) {
+    try {
+      final data = jsonDecode(snapshot.stateJson) as Map<String, dynamic>;
+      final shapesData =
+          (data['shapes'] as List<dynamic>? ?? <dynamic>[]).map((raw) {
+        return _shapeFromMap(raw as Map<String, dynamic>);
+      }).toList();
+
+      setState(() {
+        _pan = _offsetFromMap(data['pan'] as Map<String, dynamic>?);
+        _zoom = (data['zoom'] as num?)?.toDouble() ?? 1.0;
+        _shapes
+          ..clear()
+          ..addAll(shapesData);
+        _selected.clear();
+        _selectedShapeIndex = -1;
+        if (snapshot.previewBytes != null) {
+          _lastPreviewBytes = snapshot.previewBytes;
+        }
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"${snapshot.resolvedTitle}" carregado.')),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Erro ao restaurar composição: $error\n$stackTrace');
+    }
+  }
+
+  _PlacedShape _shapeFromMap(Map<String, dynamic> data) {
+    return _PlacedShape(
+      asset: data['asset'] as String,
+      position: Offset(
+        (data['x'] as num?)?.toDouble() ?? 0,
+        (data['y'] as num?)?.toDouble() ?? 0,
+      ),
+      size: (data['size'] as num?)?.toDouble() ?? _shapeSize,
+      rotation: (data['rotation'] as num?)?.toDouble(),
+      locked: data['locked'] as bool? ?? false,
+      visible: data['visible'] as bool? ?? true,
+      groupId: data['groupId'] as String?,
+      textContent: data['text'] as String?,
+      fontSize: (data['fontSize'] as num?)?.toDouble(),
+      customName: data['customName'] as String?,
+    );
+  }
+
+  Offset _offsetFromMap(Map<String, dynamic>? data) {
+    if (data == null) return Offset.zero;
+    return Offset(
+      (data['x'] as num?)?.toDouble() ?? 0,
+      (data['y'] as num?)?.toDouble() ?? 0,
     );
   }
 
