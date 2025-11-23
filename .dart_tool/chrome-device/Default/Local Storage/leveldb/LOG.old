@@ -1,50 +1,24 @@
-2025/11/23-15:30:45.995 42d4 Reusing MANIFEST C:\Users\pedro\AppData\Local\Temp\flutter_tools.33536be6\flutter_tools_chrome_device.2c694a58\Default\Local Storage\leveldb/MANIFEST-000001
-2025/11/23-15:30:46.000 42d4 Recovering log #34
-2025/11/23-15:30:46.003 42d4 Reusing old log C:\Users\pedro\AppData\Local\Temp\flutter_tools.33536be6\flutter_tools_chrome_device.2c694a58\Default\Local Storage\leveldb/000034.log 
-2025/11/23-15:30:46.004 42d4 Delete type=0 #3
-2025/11/23-15:30:46.004 42d4 Delete type=2 #7
-2025/11/23-15:30:46.004 42d4 Delete type=2 #9
-2025/11/23-15:30:46.004 42d4 Delete type=0 #10
-2025/11/23-15:30:46.004 42d4 Delete type=2 #11
-2025/11/23-15:30:46.005 42d4 Delete type=0 #13
-2025/11/23-15:30:46.005 42d4 Delete type=2 #14
-2025/11/23-15:30:46.005 42d4 Delete type=2 #18
-2025/11/23-15:30:46.005 42d4 Delete type=0 #19
-2025/11/23-15:30:46.005 42d4 Delete type=2 #20
-2025/11/23-15:30:46.005 42d4 Delete type=0 #29
-2025/11/23-15:34:04.492 2564 Level-0 table #38: started
-2025/11/23-15:34:04.520 2564 Level-0 table #38: 6926 bytes OK
-2025/11/23-15:34:04.522 2564 Delete type=0 #34
-2025/11/23-15:34:04.523 2564 Compacting 4@0 + 1@1 files
-2025/11/23-15:34:04.530 2564 Generated table #39@0: 172 keys, 245901 bytes
-2025/11/23-15:34:04.530 2564 Compacted 4@0 + 1@1 files => 245901 bytes
-2025/11/23-15:34:04.532 2564 compacted to: files[ 0 1 1 0 0 0 0 ]
-2025/11/23-15:34:04.532 2564 Delete type=2 #28
-2025/11/23-15:34:04.533 2564 Delete type=2 #30
-2025/11/23-15:34:04.533 2564 Delete type=2 #33
-2025/11/23-15:34:04.533 2564 Delete type=2 #35
-2025/11/23-15:34:04.533 2564 Delete type=2 #38
-2025/11/23-15:35:46.162 2564 Level-0 table #41: started
-2025/11/23-15:35:46.191 2564 Level-0 table #41: 12083 bytes OK
-2025/11/23-15:35:46.194 2564 Delete type=0 #37
-2025/11/23-15:38:52.273 2564 Level-0 table #43: started
-2025/11/23-15:38:52.280 2564 Level-0 table #43: 10220 bytes OK
-2025/11/23-15:38:52.283 2564 Delete type=0 #40
-2025/11/23-15:50:54.460 2564 Level-0 table #45: started
-2025/11/23-15:50:54.493 2564 Level-0 table #45: 100532 bytes OK
-2025/11/23-15:50:54.494 2564 Delete type=0 #42
-2025/11/23-15:51:16.065 2564 Level-0 table #47: started
-2025/11/23-15:51:16.070 2564 Level-0 table #47: 128600 bytes OK
-2025/11/23-15:51:16.071 2564 Delete type=0 #44
-2025/11/23-15:51:16.072 2564 Compacting 4@0 + 1@1 files
-2025/11/23-15:51:16.079 2564 Generated table #48@0: 172 keys, 377822 bytes
-2025/11/23-15:51:16.079 2564 Compacted 4@0 + 1@1 files => 377822 bytes
-2025/11/23-15:51:16.080 2564 compacted to: files[ 0 1 1 0 0 0 0 ]
-2025/11/23-15:51:16.081 2564 Delete type=2 #39
-2025/11/23-15:51:16.081 2564 Delete type=2 #41
-2025/11/23-15:51:16.081 2564 Delete type=2 #43
-2025/11/23-15:51:16.081 2564 Delete type=2 #45
-2025/11/23-15:51:16.081 2564 Delete type=2 #47
-2025/11/23-15:51:43.227 2564 Level-0 table #50: started
-2025/11/23-15:51:43.253 2564 Level-0 table #50: 128595 bytes OK
-2025/11/23-15:51:43.255 2564 Delete type=0 #46
+2025/11/23-18:52:14.829 4860 Reusing MANIFEST C:\Users\pedro\AppData\Local\Temp\flutter_tools.209791a1\flutter_tools_chrome_device.7f19bc72\Default\Local Storage\leveldb/MANIFEST-000001
+2025/11/23-18:52:14.836 4860 Recovering log #54
+2025/11/23-18:52:14.840 4860 Reusing old log C:\Users\pedro\AppData\Local\Temp\flutter_tools.209791a1\flutter_tools_chrome_device.7f19bc72\Default\Local Storage\leveldb/000054.log 
+2025/11/23-18:52:14.842 4860 Delete type=0 #3
+2025/11/23-18:52:14.842 4860 Delete type=2 #5
+2025/11/23-18:52:14.842 4860 Delete type=2 #7
+2025/11/23-18:52:14.842 4860 Delete type=2 #9
+2025/11/23-18:52:14.842 4860 Delete type=0 #10
+2025/11/23-18:52:14.842 4860 Delete type=2 #11
+2025/11/23-18:52:14.842 4860 Delete type=0 #13
+2025/11/23-18:52:14.842 4860 Delete type=2 #14
+2025/11/23-18:52:14.843 4860 Delete type=2 #18
+2025/11/23-18:52:14.843 4860 Delete type=0 #19
+2025/11/23-18:52:14.843 4860 Delete type=2 #20
+2025/11/23-18:52:14.843 4860 Delete type=2 #28
+2025/11/23-18:52:14.843 4860 Delete type=0 #29
+2025/11/23-18:52:14.843 4860 Delete type=2 #30
+2025/11/23-18:52:14.843 4860 Delete type=2 #33
+2025/11/23-18:52:14.843 4860 Delete type=0 #34
+2025/11/23-18:52:14.843 4860 Delete type=2 #35
+2025/11/23-18:52:14.843 4860 Delete type=2 #48
+2025/11/23-18:52:14.843 4860 Delete type=0 #49
+2025/11/23-18:52:14.843 4860 Delete type=2 #50
+2025/11/23-18:52:14.843 4860 Delete type=2 #52
