@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/rendering.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,7 @@ import 'package:flutter/gestures.dart';
 import 'dart:math' as math;
 import 'package:image/image.dart' as img;
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -73,6 +75,7 @@ class _PlacedShape {
   double? brushBoundsWidth; // largura real antes de normalizar
   double? brushBoundsHeight; // altura real antes de normalizar
   Offset? brushInset; // deslocamento dentro da caixa total
+  Uint8List? embeddedImageBytes;
   static const _sentinel = Object();
 
   _PlacedShape({
@@ -98,6 +101,7 @@ class _PlacedShape {
     this.brushBoundsWidth,
     this.brushBoundsHeight,
     this.brushInset,
+    this.embeddedImageBytes,
   })  : width = width ?? _defaultShapeExtent,
         height = height ?? _defaultShapeExtent,
         rotation = rotation ?? 0;
@@ -125,6 +129,7 @@ class _PlacedShape {
     double? brushBoundsWidth,
     double? brushBoundsHeight,
     Offset? brushInset,
+    Uint8List? embeddedImageBytes,
   }) => _PlacedShape(
     asset: asset ?? this.asset,
     position: position ?? this.position,
@@ -152,6 +157,7 @@ class _PlacedShape {
     brushBoundsWidth: brushBoundsWidth ?? this.brushBoundsWidth,
     brushBoundsHeight: brushBoundsHeight ?? this.brushBoundsHeight,
     brushInset: brushInset ?? this.brushInset,
+    embeddedImageBytes: embeddedImageBytes ?? this.embeddedImageBytes,
   );
 }
 
@@ -199,6 +205,16 @@ const List<Color> _shapeColorPalette = [
   Color(0xFFEC4899),
   Color(0xFF94A3B8),
 ];
+
+const String _envOpenAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
+const String _defaultOpenAiApiKey =
+  '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';
+const String _openAiImagesEndpoint =
+  'https://api.openai.com/v1/images/generations';
+const String _openAiModel = 'dall-e-3';
+
+String get _resolvedOpenAiApiKey =>
+  _envOpenAiApiKey.isNotEmpty ? _envOpenAiApiKey : _defaultOpenAiApiKey;
 
 bool _shapeSupportsStrokeColor(String asset) => _strokeColorShapes.contains(asset);
 
@@ -360,6 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
   };
   final List<_ChatMessage> _chatMessages = [];
   final TextEditingController _chatInputController = TextEditingController();
+  bool _isChatGenerating = false;
 
   void _toggleMateria(String materia) => setState(
         () => _materiaExpanded[materia] = !(_materiaExpanded[materia] ?? true),
@@ -2350,9 +2367,82 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<Uint8List> _generateImageFromPrompt(String prompt) async {
+    final apiKey = _resolvedOpenAiApiKey.trim();
+    if (apiKey.isEmpty) {
+      throw Exception('API key não configurada.');
+    }
+    final payload = jsonEncode({
+      'model': _openAiModel,
+      'prompt': prompt,
+      'size': '1024x1024',
+      'response_format': 'b64_json',
+    });
+    final response = await http
+        .post(
+          Uri.parse(_openAiImagesEndpoint),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+          body: payload,
+        )
+        .timeout(const Duration(seconds: 90));
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = decoded['data'] as List<dynamic>?;
+      if (data == null || data.isEmpty) {
+        throw Exception('Resposta sem imagem.');
+      }
+      final first = data.first as Map<String, dynamic>;
+      final base64Image = first['b64_json'] as String?;
+      if (base64Image == null || base64Image.isEmpty) {
+        throw Exception('Formato de imagem inválido.');
+      }
+      return base64Decode(base64Image);
+    } else {
+      String? detail;
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        detail = body['error']?['message'] as String?;
+      } catch (_) {}
+      throw Exception(detail ?? 'Falha ${response.statusCode} ao gerar imagem.');
+    }
+  }
+
+  void _placeGeneratedImageOnCanvas(Uint8List bytes) {
+    final baseSize = math.min(_canvasWidth, _canvasHeight) * 0.35;
+    final clampedSize = baseSize.clamp(200.0, 480.0);
+    final center = Offset(_canvasWidth / 2, _canvasHeight / 2);
+    final shape = _PlacedShape(
+      asset: 'generated:image',
+      position: center - Offset(clampedSize / 2, clampedSize / 2),
+      width: clampedSize,
+      height: clampedSize,
+      embeddedImageBytes: bytes,
+    );
+    _shapes.add(shape);
+    _selected
+      ..clear()
+      ..add(_shapes.length - 1);
+    _selectedShapeIndex = _shapes.length - 1;
+  }
+
+  String _friendlyAiError(Object error) {
+    if (error is TimeoutException) {
+      return 'Tempo limite excedido. Tente novamente.';
+    }
+    final text = error.toString();
+    if (text.contains('API key não configurada')) {
+      return 'Configure sua API key da OpenAI antes de gerar imagens.';
+    }
+    return text.replaceFirst('Exception: ', '');
+  }
+
   // Função de alinhamento removida da toolbar (mantida anteriormente); poderá ser reintroduzida em um painel dedicado.
 
-  void _handleChatSend() {
+  Future<void> _handleChatSend() async {
+    if (_isChatGenerating) return;
     final text = _chatInputController.text.trim();
     if (text.isEmpty) return;
     final userMessage = _ChatMessage(
@@ -2363,37 +2453,40 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _chatMessages.add(userMessage);
       _chatInputController.clear();
+      _isChatGenerating = true;
     });
-    final reply = _chatbotAutoReply(text);
-    Future.delayed(const Duration(milliseconds: 250), () {
+    try {
+      final bytes = await _generateImageFromPrompt(text);
+      if (!mounted) return;
+      setState(() {
+        _placeGeneratedImageOnCanvas(bytes);
+        _chatMessages.add(
+          _ChatMessage(
+            sender: _ChatSender.assistant,
+            text:
+                'Imagem criada com sucesso e posicionada no centro do canvas. Ajuste o tamanho conforme necessário.',
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+    } catch (error, stack) {
+      debugPrint('Falha IA: $error\n$stack');
       if (!mounted) return;
       setState(() {
         _chatMessages.add(
           _ChatMessage(
             sender: _ChatSender.assistant,
-            text: reply,
+            text:
+                'Não consegui gerar a imagem agora. ${_friendlyAiError(error)}',
             timestamp: DateTime.now(),
           ),
         );
       });
-    });
-  }
-
-  String _chatbotAutoReply(String rawInput) {
-    final text = rawInput.toLowerCase();
-    if (text.contains('grade') || text.contains('grid')) {
-      return 'Você pode ajustar linhas e colunas direto no painel de propriedades. Eu analiso o contexto para sugerir espaçamentos coerentes.';
+    } finally {
+      if (mounted) {
+        setState(() => _isChatGenerating = false);
+      }
     }
-    if (text.contains('pincel') || text.contains('brush') || text.contains('desenho')) {
-      return 'O modo pincel é ideal para rascunhos rápidos. Use-o para destacar regiões antes de trocar por formas definitivas.';
-    }
-    if (text.contains('canvas') || text.contains('tamanho') || text.contains('dimensão')) {
-      return 'O canvas pode chegar a 6000px. Se precisar centralizar o conteúdo, utilize o botão "Ajustar ao conteúdo" na barra superior.';
-    }
-    if (text.contains('ajuda') || text.contains('ideia')) {
-      return 'Me descreva o fenômeno ou experimento que eu monto uma sugestão de diagrama passo a passo.';
-    }
-    return 'Perfeito! Continue compartilhando suas necessidades que mantenho o contexto durante a sessão.';
   }
 
   Widget _buildChatBubble(_ChatMessage message) {
@@ -2519,7 +2612,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   minLines: 1,
                   maxLines: 3,
                   textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _handleChatSend(),
+                  onSubmitted: (_) {
+                    if (!_isChatGenerating) {
+                      _handleChatSend();
+                    }
+                  },
                   decoration: const InputDecoration(
                     hintText: 'Descreva o que precisa ou faça uma pergunta',
                     border: OutlineInputBorder(),
@@ -2529,13 +2626,28 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                onPressed: _handleChatSend,
+                onPressed: _isChatGenerating ? null : _handleChatSend,
                 style: IconButton.styleFrom(
                   backgroundColor: AppTheme.colors.primary,
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor:
+                      AppTheme.colors.primary.withValues(alpha: 0.3),
+                  disabledForegroundColor: Colors.white70,
                 ),
-                icon: const Icon(Icons.send, size: 18),
-                tooltip: 'Enviar mensagem',
+                icon: _isChatGenerating
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.send, size: 18),
+                tooltip: _isChatGenerating
+                    ? 'Gerando imagem...'
+                    : 'Enviar mensagem',
               ),
             ],
           ),
@@ -2727,34 +2839,42 @@ class _HomeScreenState extends State<HomeScreen> {
                               )
                             : null,
                         padding: EdgeInsets.all(isSelected ? 2 : 0),
-                        child: s.asset.startsWith('generated:')
-                            ? (s.asset == 'generated:text'
-                                ? CustomPaint(
-                                    painter: _TextShapePainter(
-                                      text: s.textContent ?? 'Texto',
-                                      fontSize: s.fontSize ?? 16,
-                                    ),
-                                    size: Size.infinite,
-                                  )
-                                : CustomPaint(
-                                    painter: _shapePainterForKey(
-                                      s.asset,
-                                      shape: s,
-                                      strokeColor: _resolvedStrokeColor(s),
-                                      fillColor: _resolvedFillColor(s),
-                                    ),
-                                    size: Size.infinite,
-                                  ))
-                            : Image.asset(
-                                s.asset,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stack) => Icon(
-                                  Icons.crop_square,
-                                  size:
-                                      math.min(s.width, s.height) * 0.6,
-                                  color: Colors.grey[400],
+                        child: s.embeddedImageBytes != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.memory(
+                                  s.embeddedImageBytes!,
+                                  fit: BoxFit.cover,
+                                  gaplessPlayback: true,
                                 ),
-                              ),
+                              )
+                            : s.asset.startsWith('generated:')
+                                ? (s.asset == 'generated:text'
+                                    ? CustomPaint(
+                                        painter: _TextShapePainter(
+                                          text: s.textContent ?? 'Texto',
+                                          fontSize: s.fontSize ?? 16,
+                                        ),
+                                        size: Size.infinite,
+                                      )
+                                    : CustomPaint(
+                                        painter: _shapePainterForKey(
+                                          s.asset,
+                                          shape: s,
+                                          strokeColor: _resolvedStrokeColor(s),
+                                          fillColor: _resolvedFillColor(s),
+                                        ),
+                                        size: Size.infinite,
+                                      ))
+                                : Image.asset(
+                                    s.asset,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stack) => Icon(
+                                      Icons.crop_square,
+                                      size: math.min(s.width, s.height) * 0.6,
+                                      color: Colors.grey[400],
+                                    ),
+                                  ),
                       ),
                     ),
                   ),
@@ -3801,7 +3921,20 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
     if (_lastPreviewBytes == null) return;
-    await _autoSaveCurrentSessionToHistory();
+    try {
+      await _autoSaveCurrentSessionToHistory();
+    } catch (error, stackTrace) {
+      debugPrint('Falha ao salvar histórico automaticamente: $error\n$stackTrace');
+      if (mounted) {
+        showAppNotification(
+          context,
+          message:
+              'Não consegui salvar no histórico agora, mas sua prévia foi gerada.',
+          type: AppNotificationType.warning,
+        );
+      }
+    }
+    if (!mounted) return;
     _showSavePreviewPanel();
   }
 
@@ -4205,6 +4338,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 'x': shape.brushInset!.dx,
                 'y': shape.brushInset!.dy,
               },
+            if (shape.embeddedImageBytes != null)
+              'imageBytes': base64Encode(shape.embeddedImageBytes!),
           },
       ],
     };
@@ -4307,6 +4442,9 @@ class _HomeScreenState extends State<HomeScreen> {
       brushBoundsWidth: _toDouble(data['brushBoundsWidth']),
       brushBoundsHeight: _toDouble(data['brushBoundsHeight']),
       brushInset: _offsetFromMap(data['brushInset'] as Map<String, dynamic>?),
+      embeddedImageBytes: data['imageBytes'] is String
+          ? Uint8List.fromList(base64Decode(data['imageBytes'] as String))
+          : null,
     );
   }
 
