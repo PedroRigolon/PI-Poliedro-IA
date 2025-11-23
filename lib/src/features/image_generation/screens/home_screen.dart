@@ -16,7 +16,11 @@ import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_navbar.dart';
 import '../models/diagram_template.dart';
 import '../../collection/models/canvas_snapshot.dart';
+import '../../collection/providers/collection_provider.dart';
+import '../../collection/widgets/collection_picker_sheet.dart';
+import '../../collection/widgets/snapshot_metadata_sheet.dart';
 import '../../history/providers/history_provider.dart';
+import '../../../widgets/app_notification.dart';
 
 /// Simple grid painter for the empty canvas area.
 class CanvasGridPainter extends CustomPainter {
@@ -55,6 +59,11 @@ class _PlacedShape {
   double? fontSize;
   // Nome customizado (se null, usa nome padrão do asset)
   String? customName;
+  Color? strokeColor;
+  Color? fillColor;
+  int? gridRows;
+  int? gridCols;
+  static const _sentinel = Object();
   _PlacedShape({
     required this.asset,
     required this.position,
@@ -66,6 +75,10 @@ class _PlacedShape {
     this.textContent,
     this.fontSize,
     this.customName,
+    this.strokeColor,
+    this.fillColor,
+    this.gridRows,
+    this.gridCols,
   }) : rotation = rotation ?? 0;
 
   _PlacedShape copyWith({
@@ -79,6 +92,10 @@ class _PlacedShape {
     String? textContent,
     double? fontSize,
     String? customName,
+    Object? strokeColor = _sentinel,
+    Object? fillColor = _sentinel,
+    int? gridRows,
+    int? gridCols,
   }) => _PlacedShape(
     asset: asset ?? this.asset,
     position: position ?? this.position,
@@ -90,8 +107,103 @@ class _PlacedShape {
     textContent: textContent ?? this.textContent,
     fontSize: fontSize ?? this.fontSize,
     customName: customName ?? this.customName,
+    strokeColor: identical(strokeColor, _sentinel)
+        ? this.strokeColor
+        : strokeColor as Color?,
+    fillColor: identical(fillColor, _sentinel)
+        ? this.fillColor
+        : fillColor as Color?,
+    gridRows: gridRows ?? this.gridRows,
+    gridCols: gridCols ?? this.gridCols,
   );
 }
+
+const Set<String> _strokeColorShapes = {
+  'generated:rect',
+  'generated:circle',
+  'generated:triangle',
+  'generated:block',
+  'generated:line_solid',
+  'generated:line_dashed',
+  'generated:vector',
+  'generated:grid',
+};
+
+const Set<String> _fillColorShapes = {
+  'generated:rect',
+  'generated:circle',
+  'generated:triangle',
+  'generated:block',
+};
+
+const List<Color> _shapeColorPalette = [
+  Colors.black,
+  Colors.white,
+  Color(0xFFEF4444),
+  Color(0xFFF97316),
+  Color(0xFFFACC15),
+  Color(0xFF22C55E),
+  Color(0xFF0EA5E9),
+  Color(0xFF6366F1),
+  Color(0xFFEC4899),
+  Color(0xFF94A3B8),
+];
+
+bool _shapeSupportsStrokeColor(String asset) => _strokeColorShapes.contains(asset);
+
+bool _shapeSupportsFillColor(String asset) => _fillColorShapes.contains(asset);
+
+const int _defaultGridRows = 4;
+const int _defaultGridCols = 4;
+const int _minGridDivisions = 1;
+const int _maxGridDivisions = 20;
+
+Color _defaultStrokeColor(String asset) {
+  switch (asset) {
+    default:
+      return Colors.black;
+  }
+}
+
+Color _resolvedStrokeColor(_PlacedShape s) {
+  return s.strokeColor ?? _defaultStrokeColor(s.asset);
+}
+
+Color? _resolvedFillColor(_PlacedShape s) {
+  if (!_shapeSupportsFillColor(s.asset)) return null;
+  return s.fillColor;
+}
+
+int? _encodeColor(Color? color) => color?.value;
+
+Color? _decodeColor(dynamic value) {
+  if (value == null) return null;
+  if (value is Color) return value;
+  if (value is int) return Color(value);
+  if (value is num) return Color(value.toInt());
+  if (value is String) {
+    final normalized = value.trim();
+    if (normalized.startsWith('#')) {
+      final hex = normalized.substring(1);
+      final parsed = int.tryParse(hex, radix: 16);
+      if (parsed != null) {
+        if (hex.length <= 6) {
+          return Color(0xFF000000 | parsed);
+        }
+        return Color(parsed);
+      }
+    }
+    final parsed = int.tryParse(normalized);
+    if (parsed != null) {
+      return Color(parsed);
+    }
+  }
+  return null;
+}
+
+int _resolvedGridRows(_PlacedShape shape) => shape.gridRows ?? _defaultGridRows;
+
+int _resolvedGridCols(_PlacedShape shape) => shape.gridCols ?? _defaultGridCols;
 
 // Intents para atalhos de teclado
 class _DeleteShapeIntent extends Intent {
@@ -144,6 +256,15 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedShapeIndex = -1; // principal (retrocompatibilidade)
   final Set<int> _selected = <int>{};
   final FocusNode _canvasFocusNode = FocusNode();
+  static const double _defaultCanvasWidth = 1600;
+  static const double _defaultCanvasHeight = 900;
+  static const double _minCanvasDimension = 400;
+  static const double _maxCanvasDimension = 6000;
+  static const double _canvasStep = 100;
+  double _canvasWidth = _defaultCanvasWidth;
+  double _canvasHeight = _defaultCanvasHeight;
+  late final TextEditingController _canvasWidthController;
+  late final TextEditingController _canvasHeightController;
   bool _interactingWithHandle = false;
   List<_PlacedShape>? _clipboard;
   // Zoom & Pan
@@ -159,6 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _shiftHeld = false;
   bool _exportingTransparent = false;
   Uint8List? _lastPreviewBytes;
+  CanvasSnapshot? _latestHistorySnapshot;
   CanvasSnapshot? _loadedSnapshot;
   // Flag para esconder grade durante capturas / preview
   bool _suppressGridDuringCapture = false;
@@ -206,6 +328,23 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _subExpanded[sub] = !(_subExpanded[sub] ?? true));
 
   @override
+  void initState() {
+    super.initState();
+    _canvasWidthController =
+        TextEditingController(text: _canvasWidth.round().toString());
+    _canvasHeightController =
+        TextEditingController(text: _canvasHeight.round().toString());
+  }
+
+  @override
+  void dispose() {
+    _canvasWidthController.dispose();
+    _canvasHeightController.dispose();
+    _canvasFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -218,6 +357,84 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         });
       }
+    }
+  }
+
+  void _applyCanvasSize({double? width, double? height}) {
+    setState(() {
+      if (width != null) {
+        _canvasWidth = width;
+      }
+      if (height != null) {
+        _canvasHeight = height;
+      }
+      _clampShapesToCanvas();
+    });
+    _syncCanvasControllers();
+  }
+
+  void _stepCanvasDimension({required bool isWidth, required double delta}) {
+    final current = isWidth ? _canvasWidth : _canvasHeight;
+    final next = (current + delta)
+        .clamp(_minCanvasDimension, _maxCanvasDimension)
+        .toDouble();
+    _applyCanvasSize(
+      width: isWidth ? next : null,
+      height: isWidth ? null : next,
+    );
+  }
+
+  void _resetCanvasSize() {
+    _applyCanvasSize(
+      width: _defaultCanvasWidth,
+      height: _defaultCanvasHeight,
+    );
+  }
+
+  void _syncCanvasControllers() {
+    _setControllerValue(_canvasWidthController, _canvasWidth.round().toString());
+    _setControllerValue(
+      _canvasHeightController,
+      _canvasHeight.round().toString(),
+    );
+  }
+
+  void _setControllerValue(TextEditingController controller, String value) {
+    if (controller.text == value) return;
+    controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+
+  void _commitCanvasDimensionInput({required bool isWidth}) {
+    final controller = isWidth ? _canvasWidthController : _canvasHeightController;
+    final rawValue = controller.text.trim();
+    if (rawValue.isEmpty) {
+      _syncCanvasControllers();
+      return;
+    }
+    final parsed = double.tryParse(rawValue);
+    if (parsed == null) {
+      _syncCanvasControllers();
+      return;
+    }
+    final clamped =
+        parsed.clamp(_minCanvasDimension, _maxCanvasDimension).toDouble();
+    _applyCanvasSize(
+      width: isWidth ? clamped : null,
+      height: isWidth ? null : clamped,
+    );
+  }
+
+  void _clampShapesToCanvas() {
+    for (final shape in _shapes) {
+      final maxX = math.max(0.0, _canvasWidth - shape.size);
+      final maxY = math.max(0.0, _canvasHeight - shape.size);
+      shape.position = Offset(
+        shape.position.dx.clamp(0.0, maxX),
+        shape.position.dy.clamp(0.0, maxY),
+      );
     }
   }
 
@@ -507,13 +724,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                         });
                                       } else if (ctrl) {
                                         // Ctrl + Scroll: pan vertical
-                                        setState(() {
-                                          _pan += Offset(
-                                            0,
-                                            -event.scrollDelta.dy *
-                                                _scrollPanFactor,
-                                          );
-                                        });
+                                        final dy = event.scrollDelta.dy != 0
+                                            ? event.scrollDelta.dy
+                                            : event.scrollDelta.dx;
+                                        if (dy != 0) {
+                                          setState(() {
+                                            _pan += Offset(
+                                              0,
+                                              -dy * _scrollPanFactor,
+                                            );
+                                          });
+                                        }
                                       } else {
                                         // Scroll: zoom por paradas discretas no ponto do cursor
                                         final zoomIn = event.scrollDelta.dy < 0;
@@ -637,26 +858,37 @@ class _HomeScreenState extends State<HomeScreen> {
                                               ..translate(_pan.dx, _pan.dy)
                                               ..scale(_zoom, _zoom),
                                             alignment: Alignment.topLeft,
-                                            child: Stack(
-                                              children: [
-                                                Positioned.fill(
-                                                  child: Container(
-                                                    color: _exportingTransparent
-                                                        ? Colors.transparent
-                                                        : Colors.white,
-                                                    child: CustomPaint(
-                                                      painter:
-                                                          (_showGrid &&
-                                                              !_suppressGridDuringCapture)
-                                                          ? CanvasGridPainter()
-                                                          : null,
+                                            child: OverflowBox(
+                                              alignment: Alignment.topLeft,
+                                              minWidth: _canvasWidth,
+                                              maxWidth: _canvasWidth,
+                                              minHeight: _canvasHeight,
+                                              maxHeight: _canvasHeight,
+                                              child: SizedBox(
+                                                width: _canvasWidth,
+                                                height: _canvasHeight,
+                                                child: Stack(
+                                                  children: [
+                                                    Positioned.fill(
+                                                      child: Container(
+                                                        color: _exportingTransparent
+                                                            ? Colors.transparent
+                                                            : Colors.white,
+                                                        child: CustomPaint(
+                                                          painter:
+                                                              (_showGrid &&
+                                                                  !_suppressGridDuringCapture)
+                                                              ? CanvasGridPainter()
+                                                              : null,
+                                                        ),
+                                                      ),
                                                     ),
-                                                  ),
-                                                ),
-                                                ..._buildShapesContent(),
+                                                    ..._buildShapesContent(),
 
-                                                // Marquee overlay movido para fora se necessário
-                                              ],
+                                                    // Marquee overlay movido para fora se necessário
+                                                  ],
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -734,11 +966,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           TextButton(
                             onPressed: _fitToContent,
                             child: const Text('Ajustar'),
-                          ),
-                          const SizedBox(width: 4),
-                          TextButton(
-                            onPressed: _resetZoom100,
-                            child: const Text('100%'),
                           ),
                           const SizedBox(width: 8),
                           const VerticalDivider(width: 12),
@@ -983,6 +1210,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       'generated:rect',
                       'generated:circle',
                       'generated:triangle',
+                      'generated:grid',
                       'generated:line_solid',
                       'generated:line_dashed',
                     ]),
@@ -1110,6 +1338,42 @@ class _HomeScreenState extends State<HomeScreen> {
               title: const Text('Mostrar grade'),
               subtitle: const Text('Exibe linhas de apoio no canvas'),
             ),
+            const SizedBox(height: 16),
+            Text(
+              'Dimensões (px)',
+              style: AppTheme.typography.title.copyWith(fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            _buildCanvasDimensionField(
+              label: 'Largura',
+              controller: _canvasWidthController,
+              onIncrease: () =>
+                  _stepCanvasDimension(isWidth: true, delta: _canvasStep),
+              onDecrease: () =>
+                  _stepCanvasDimension(isWidth: true, delta: -_canvasStep),
+              onCommit: () =>
+                  _commitCanvasDimensionInput(isWidth: true),
+            ),
+            const SizedBox(height: 12),
+            _buildCanvasDimensionField(
+              label: 'Altura',
+              controller: _canvasHeightController,
+              onIncrease: () =>
+                  _stepCanvasDimension(isWidth: false, delta: _canvasStep),
+              onDecrease: () =>
+                  _stepCanvasDimension(isWidth: false, delta: -_canvasStep),
+              onCommit: () =>
+                  _commitCanvasDimensionInput(isWidth: false),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _resetCanvasSize,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Resetar dimensões'),
+              ),
+            ),
             const Divider(height: 24),
             // Outras configurações (reservado para futuras opções)
           ],
@@ -1167,7 +1431,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     border: Border.all(color: Colors.grey[300]!),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: CustomPaint(painter: _shapePainterForKey(s.asset)),
+                  child: CustomPaint(
+                    painter: _shapePainterForKey(
+                      s.asset,
+                      strokeColor: _resolvedStrokeColor(s),
+                      fillColor: _resolvedFillColor(s),
+                    ),
+                  ),
                 )
               : Container(
                   width: 28,
@@ -1488,21 +1758,38 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Mapeia chave generated:* para painter
-  CustomPainter _shapePainterForKey(String key) {
+  CustomPainter _shapePainterForKey(
+    String key, {
+    Color? strokeColor,
+    Color? fillColor,
+  }) {
     final base = key.replaceFirst('generated:', '');
+    final resolvedStroke = strokeColor ?? _defaultStrokeColor(key);
     switch (base) {
       case 'rect':
-        return _RectPainter();
+        return _RectPainter(
+          strokeColor: resolvedStroke,
+          fillColor: fillColor,
+        );
       case 'circle':
-        return _CirclePainter();
+        return _CirclePainter(
+          strokeColor: resolvedStroke,
+          fillColor: fillColor,
+        );
       case 'triangle':
-        return _TrianglePainter();
+        return _TrianglePainter(
+          strokeColor: resolvedStroke,
+          fillColor: fillColor,
+        );
       case 'line_solid':
-        return _LinePainter(dashed: false);
+        return _LinePainter(dashed: false, color: resolvedStroke);
       case 'line_dashed':
-        return _LinePainter(dashed: true);
+        return _LinePainter(dashed: true, color: resolvedStroke);
       case 'block':
-        return _BlockPainter();
+        return _BlockPainter(
+          strokeColor: resolvedStroke,
+          fillColor: fillColor,
+        );
       case 'plane':
         return _InclinedPlanePainter();
       case 'pulley':
@@ -1510,7 +1797,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'spring':
         return _SpringPainter();
       case 'vector':
-        return _ForceVectorPainter();
+        return _ForceVectorPainter(color: resolvedStroke);
       case 'resistor':
         return _ResistorPainter();
       case 'battery':
@@ -1566,7 +1853,10 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'benzene':
         return _BenzenePainter();
       default:
-        return _RectPainter();
+        return _RectPainter(
+          strokeColor: resolvedStroke,
+          fillColor: fillColor,
+        );
     }
   }
 
@@ -1595,6 +1885,16 @@ class _HomeScreenState extends State<HomeScreen> {
             size: _shapeSize,
             textContent: 'Texto',
             fontSize: 16,
+          ),
+        );
+      } else if (asset == 'generated:grid') {
+        _shapes.add(
+          _PlacedShape(
+            asset: asset,
+            position: position,
+            size: _shapeSize,
+            gridRows: _defaultGridRows,
+            gridCols: _defaultGridCols,
           ),
         );
       } else {
@@ -1637,6 +1937,22 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     _selectedShapeIndex = _selected.isNotEmpty ? _selected.last : -1;
+  }
+
+  void _adjustGridDivision({required bool isRows, required int delta}) {
+    if (_selected.length != 1) return;
+    final shape = _shapes[_selected.first];
+    if (shape.asset != 'generated:grid') return;
+    final current = isRows ? _resolvedGridRows(shape) : _resolvedGridCols(shape);
+    final next = (current + delta).clamp(_minGridDivisions, _maxGridDivisions);
+    if (next == current) return;
+    setState(() {
+      if (isRows) {
+        shape.gridRows = next;
+      } else {
+        shape.gridCols = next;
+      }
+    });
   }
 
   List<Widget> _buildSelectionToolbar() {
@@ -1919,21 +2235,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _nudgeSelected(Offset delta) {
     if (_selected.isEmpty) return;
-    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-    final sizeCanvas = box?.size;
     setState(() {
       for (final i in _selected) {
         final shp = _shapes[i];
         if (shp.locked) continue;
         shp.position += delta;
-        if (sizeCanvas != null) {
-          final maxX = sizeCanvas.width - shp.size;
-          final maxY = sizeCanvas.height - shp.size;
-          shp.position = Offset(
-            shp.position.dx.clamp(0.0, maxX),
-            shp.position.dy.clamp(0.0, maxY),
-          );
-        }
+        final maxX = math.max(0.0, _canvasWidth - shp.size);
+        final maxY = math.max(0.0, _canvasHeight - shp.size);
+        shp.position = Offset(
+          shp.position.dx.clamp(0.0, maxX),
+          shp.position.dy.clamp(0.0, maxY),
+        );
       }
     });
   }
@@ -1981,6 +2293,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final rect = Rect.fromLTRB(minX, minY, maxX, maxY).inflate(padding);
     return rect;
+  }
+
+  void _handleShapeDoubleTap(_PlacedShape shape, int index) {
+    if (_interactingWithHandle) return;
+    if (shape.asset != 'generated:text') return;
+    setState(() {
+      _selected
+        ..clear()
+        ..add(index);
+      _selectedShapeIndex = index;
+      _selectedIndex = 3; // abre painel de propriedades
+    });
   }
 
   List<Widget> _buildShapesContent() {
@@ -2037,6 +2361,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
                 _canvasFocusNode.requestFocus();
               },
+              onDoubleTap: () => _handleShapeDoubleTap(s, index),
               onPanStart: (_) {
                 if (_interactingWithHandle) return;
                 setState(() {
@@ -2100,15 +2425,22 @@ class _HomeScreenState extends State<HomeScreen> {
                             : null,
                         padding: EdgeInsets.all(isSelected ? 2 : 0),
                         child: s.asset.startsWith('generated:')
-                            ? CustomPaint(
-                                painter: s.asset == 'generated:text'
-                                    ? _TextShapePainter(
-                                        text: s.textContent ?? 'Texto',
-                                        fontSize: s.fontSize ?? 16,
-                                      )
-                                    : _shapePainterForKey(s.asset),
-                                size: Size.infinite,
-                              )
+                            ? (s.asset == 'generated:text'
+                                ? CustomPaint(
+                                    painter: _TextShapePainter(
+                                      text: s.textContent ?? 'Texto',
+                                      fontSize: s.fontSize ?? 16,
+                                    ),
+                                    size: Size.infinite,
+                                  )
+                                : CustomPaint(
+                                    painter: _shapePainterForKey(
+                                      s.asset,
+                                      strokeColor: _resolvedStrokeColor(s),
+                                      fillColor: _resolvedFillColor(s),
+                                    ),
+                                    size: Size.infinite,
+                                  ))
                             : Image.asset(
                                 s.asset,
                                 fit: BoxFit.contain,
@@ -2261,6 +2593,31 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ? details.delta.dx
                                         : details.delta.dy)
                                   : details.delta.dx;
+                              if (s.asset == 'generated:text') {
+                                final currentFont = s.fontSize ?? 16;
+                                final nextFont = (currentFont + rawDelta / _zoom)
+                                    .clamp(8.0, 240.0);
+                                s.fontSize = nextFont;
+                                _autoResizeTextShape(s);
+                                final renderBox =
+                                    _canvasKey.currentContext?.findRenderObject()
+                                        as RenderBox?;
+                                if (renderBox != null) {
+                                  final sizeCanvas = renderBox.size;
+                                  final maxAllowed = math.min(
+                                    sizeCanvas.width - s.position.dx,
+                                    sizeCanvas.height - s.position.dy,
+                                  );
+                                  if (maxAllowed.isFinite && maxAllowed > 24 &&
+                                      s.size > maxAllowed) {
+                                    final factor = maxAllowed / s.size;
+                                    s.fontSize =
+                                        ((s.fontSize ?? 16) * factor).clamp(8.0, 240.0);
+                                    _autoResizeTextShape(s);
+                                  }
+                                }
+                                return;
+                              }
                               double newSize = s.size + rawDelta / _zoom;
                               newSize = newSize.clamp(24.0, 320.0);
                               final renderBox =
@@ -2309,10 +2666,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                     Offset(shp.size / 2, shp.size / 2) -
                                     center;
                                 final relScaled = rel * scale;
-                                shp.size = (shp.size * scale).clamp(
-                                  16.0,
-                                  640.0,
-                                );
+                                if (shp.asset == 'generated:text') {
+                                  final updatedFont =
+                                      ((shp.fontSize ?? 16) * scale).clamp(8.0, 240.0);
+                                  shp.fontSize = updatedFont;
+                                  _autoResizeTextShape(shp);
+                                } else {
+                                  shp.size = (shp.size * scale).clamp(
+                                    16.0,
+                                    640.0,
+                                  );
+                                }
                                 shp.position =
                                     center +
                                     relScaled -
@@ -2730,6 +3094,51 @@ class _HomeScreenState extends State<HomeScreen> {
                         subtitle: const Text('Exibir no canvas'),
                       ),
                     ]),
+                    if (_selectionSupportsStrokeEditing()) ...[
+                      const Divider(height: 24),
+                      _buildPropertySection('Aparência', [
+                        _buildColorPickerField(
+                          label: 'Cor do traço',
+                          selected: _commonStrokeColor(),
+                          onSelected: (color) {
+                            if (color == null) return;
+                            _setStrokeColor(color);
+                          },
+                        ),
+                        if (_selectionSupportsFillEditing()) ...[
+                          const SizedBox(height: 12),
+                          _buildColorPickerField(
+                            label: 'Preenchimento',
+                            selected: _commonFillColor(),
+                            allowNone: true,
+                            onSelected: (color) => _setFillColor(color),
+                          ),
+                        ],
+                      ]),
+                    ],
+                    if (_selected.length == 1 &&
+                        _shapes[_selected.first].asset == 'generated:grid') ...[
+                      const Divider(height: 24),
+                      _buildPropertySection('Grade', [
+                        _buildGridPropertyField(
+                          label: 'Linhas',
+                          value: _resolvedGridRows(_shapes[_selected.first]),
+                          onDecrease: () =>
+                              _adjustGridDivision(isRows: true, delta: -1),
+                          onIncrease: () =>
+                              _adjustGridDivision(isRows: true, delta: 1),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildGridPropertyField(
+                          label: 'Colunas',
+                          value: _resolvedGridCols(_shapes[_selected.first]),
+                          onDecrease: () =>
+                              _adjustGridDivision(isRows: false, delta: -1),
+                          onIncrease: () =>
+                              _adjustGridDivision(isRows: false, delta: 1),
+                        ),
+                      ]),
+                    ],
                     // Propriedades específicas de texto
                     if (_selected.length == 1 &&
                         _shapes[_selected.first].asset == 'generated:text') ...[
@@ -2766,6 +3175,70 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCanvasDimensionField({
+    required String label,
+    required TextEditingController controller,
+    required VoidCallback onIncrease,
+    required VoidCallback onDecrease,
+    required VoidCallback onCommit,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTheme.typography.title.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            _dimensionStepButton(icon: Icons.remove, onPressed: onDecrease),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  suffixText: 'px',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onSubmitted: (_) => onCommit(),
+                onEditingComplete: onCommit,
+                onTapOutside: (_) => onCommit(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _dimensionStepButton(icon: Icons.add, onPressed: onIncrease),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _dimensionStepButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          shape: const CircleBorder(),
+        ),
+        child: Icon(icon, size: 18),
+      ),
     );
   }
 
@@ -2810,6 +3283,162 @@ class _HomeScreenState extends State<HomeScreen> {
           onChanged(parsed);
         }
       },
+    );
+  }
+
+  Widget _buildGridPropertyField({
+    required String label,
+    required int value,
+    required VoidCallback onDecrease,
+    required VoidCallback onIncrease,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTheme.typography.title.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              _smallRoundButton(icon: Icons.remove, onTap: onDecrease),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$value divisões',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _smallRoundButton(icon: Icons.add, onTap: onIncrease),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _selectionSupportsStrokeEditing() {
+    return _selected.any(
+      (index) => _shapeSupportsStrokeColor(_shapes[index].asset),
+    );
+  }
+
+  bool _selectionSupportsFillEditing() {
+    return _selected.any(
+      (index) => _shapeSupportsFillColor(_shapes[index].asset),
+    );
+  }
+
+  Color? _commonStrokeColor() {
+    Color? reference;
+    var initialized = false;
+    for (final index in _selected) {
+      final shape = _shapes[index];
+      if (!_shapeSupportsStrokeColor(shape.asset)) continue;
+      final current = _resolvedStrokeColor(shape);
+      if (!initialized) {
+        reference = current;
+        initialized = true;
+      } else if (reference!.value != current.value) {
+        return null;
+      }
+    }
+    return initialized ? reference : null;
+  }
+
+  Color? _commonFillColor() {
+    Color? reference;
+    var initialized = false;
+    for (final index in _selected) {
+      final shape = _shapes[index];
+      if (!_shapeSupportsFillColor(shape.asset)) continue;
+      final current = shape.fillColor;
+      if (!initialized) {
+        reference = current;
+        initialized = true;
+      } else {
+        final matches = (reference == null && current == null) ||
+            (reference != null &&
+                current != null &&
+                reference.value == current.value);
+        if (!matches) return null;
+      }
+    }
+    return initialized ? reference : null;
+  }
+
+  void _setStrokeColor(Color color) {
+    setState(() {
+      _updateSelectedShapes((shape) {
+        if (_shapeSupportsStrokeColor(shape.asset)) {
+          shape.strokeColor = color;
+        }
+      });
+    });
+  }
+
+  void _setFillColor(Color? color) {
+    setState(() {
+      _updateSelectedShapes((shape) {
+        if (_shapeSupportsFillColor(shape.asset)) {
+          shape.fillColor = color;
+        }
+      });
+    });
+  }
+
+  Widget _buildColorPickerField({
+    required String label,
+    required Color? selected,
+    required ValueChanged<Color?> onSelected,
+    bool allowNone = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTheme.typography.title.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            if (allowNone)
+              _ColorChip(
+                color: Colors.transparent,
+                isNone: true,
+                selected: selected == null,
+                onTap: () => onSelected(null),
+              ),
+            for (final color in _shapeColorPalette)
+              _ColorChip(
+                color: color,
+                selected: selected != null && selected.value == color.value,
+                onTap: () => onSelected(color),
+              ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -3021,6 +3650,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ) ??
         false;
     if (!confirm) return;
+    _latestHistorySnapshot = null;
     // Mostra overlay primeiro (setState) e depois realiza captura assíncrona
     if (mounted) {
       setState(() {
@@ -3038,6 +3668,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
     if (_lastPreviewBytes == null) return;
+    await _autoSaveCurrentSessionToHistory();
     _showSavePreviewPanel();
   }
 
@@ -3180,9 +3811,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       Row(
                         children: [
                           OutlinedButton.icon(
-                            onPressed: _saveSessionToHistory,
+                            onPressed: _saveSessionToCollection,
                             icon: const Icon(Icons.bookmark_border, size: 18),
-                            label: const Text('Salvar sessão'),
+                            label: const Text('Coleção'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.pinkAccent,
                               side: const BorderSide(color: Colors.pinkAccent),
@@ -3220,34 +3851,97 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _saveSessionToHistory() async {
+  Future<void> _saveSessionToCollection() async {
     if (_lastPreviewBytes == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gere uma pré-visualização antes de salvar.')),
+      showAppNotification(
+        context,
+        message: 'Gere uma pré-visualização antes de salvar.',
+        type: AppNotificationType.warning,
       );
       return;
     }
 
-    final snapshotPayload = _buildSnapshotPayload();
     final now = DateTime.now();
-    final defaultTitle =
-        'Sessão ${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final defaultTitle = _buildDefaultSessionTitle(now);
 
-    final snapshot = CanvasSnapshot(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      createdAt: now,
-      title: defaultTitle,
-      stateJson: jsonEncode(snapshotPayload),
-      previewBase64: base64Encode(_lastPreviewBytes!),
+    final meta = await showSnapshotMetadataSheet(
+      context,
+      initialTitle: defaultTitle,
+      helperText: 'Esse nome aparece no histórico e na coleção.',
+      titleLabel: 'Detalhes da sessão',
+      actionLabel: 'Salvar',
     );
 
+    if (meta == null || !mounted) return;
+    final trimmedTitle = meta.title.trim();
+    final resolvedTitle =
+        trimmedTitle.isEmpty ? defaultTitle : trimmedTitle;
+    final trimmedNotes = meta.notes?.trim();
+    final resolvedNotes = trimmedNotes?.isEmpty == true ? null : trimmedNotes;
+
     final historyProvider = context.read<HistoryProvider>();
-    await historyProvider.add(snapshot);
+    CanvasSnapshot? baseSnapshot = _latestHistorySnapshot;
+    final snapshotAlreadyInHistory = baseSnapshot != null;
+    if (!snapshotAlreadyInHistory) {
+      baseSnapshot = _composeSnapshot(
+        id: now.microsecondsSinceEpoch.toString(),
+        createdAt: now,
+        title: resolvedTitle,
+        notes: resolvedNotes,
+      );
+      await historyProvider.add(baseSnapshot);
+      if (!mounted) return;
+    }
+
+    final updatedSnapshot = baseSnapshot.copyWith(
+      title: resolvedTitle,
+      notes: resolvedNotes,
+    );
+    _latestHistorySnapshot = updatedSnapshot;
+
+    if (snapshotAlreadyInHistory) {
+      await historyProvider.updateMetadata(
+        updatedSnapshot.id,
+        title: resolvedTitle,
+        notes: resolvedNotes,
+      );
+    }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sessão salva no histórico.')),
+
+    final collectionProvider = context.read<CollectionProvider>();
+    await collectionProvider.initialize();
+    if (!mounted) return;
+
+    final selection = await showCollectionPickerSheet(
+      context,
+      collections: collectionProvider.collections,
+    );
+
+    String message = 'Sessão salva no histórico.';
+
+    if (selection != null && mounted) {
+      var targetCollectionId = selection.collectionId;
+      if (selection.pendingName != null) {
+        final created =
+            await collectionProvider.createCollection(selection.pendingName!);
+        targetCollectionId = created.id;
+      }
+
+      if (targetCollectionId != null && mounted) {
+        await collectionProvider.addSession(targetCollectionId, updatedSnapshot);
+        final targetName =
+            collectionProvider.getById(targetCollectionId)?.name ?? 'Coleção';
+        message = 'Sessão salva no histórico e adicionada em "$targetName".';
+      }
+    }
+
+    if (!mounted) return;
+    showAppNotification(
+      context,
+      message: message,
+      type: AppNotificationType.success,
     );
   }
 
@@ -3282,11 +3976,62 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _buildDefaultSessionTitle(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return 'Sessão $day/$month $hour:$minute';
+  }
+
+  CanvasSnapshot _composeSnapshot({
+    required String id,
+    required DateTime createdAt,
+    String? title,
+    String? notes,
+  }) {
+    final trimmedTitle = title?.trim();
+    final trimmedNotes = notes?.trim();
+    return CanvasSnapshot(
+      id: id,
+      createdAt: createdAt,
+      title: trimmedTitle?.isEmpty == true ? null : trimmedTitle,
+      notes: trimmedNotes?.isEmpty == true ? null : trimmedNotes,
+      stateJson: jsonEncode(_buildSnapshotPayload()),
+      previewBase64: base64Encode(_lastPreviewBytes!),
+    );
+  }
+
+  Future<void> _autoSaveCurrentSessionToHistory() async {
+    if (!mounted || _lastPreviewBytes == null) return;
+    final now = DateTime.now();
+    final snapshot = _composeSnapshot(
+      id: now.microsecondsSinceEpoch.toString(),
+      createdAt: now,
+      title: _buildDefaultSessionTitle(now),
+    );
+    final historyProvider = context.read<HistoryProvider>();
+    await historyProvider.add(snapshot);
+    _latestHistorySnapshot = snapshot;
+    if (!mounted) return;
+    showAppNotification(
+      context,
+      message: 'Sessão salva no histórico.',
+      type: AppNotificationType.success,
+    );
+  }
+
   Map<String, dynamic> _buildSnapshotPayload() {
     return {
       'createdAt': DateTime.now().toIso8601String(),
       'pan': {'x': _pan.dx, 'y': _pan.dy},
       'zoom': _zoom,
+      'canvas': {
+        'width': _canvasWidth,
+        'height': _canvasHeight,
+      },
+      'canvasWidth': _canvasWidth,
+      'canvasHeight': _canvasHeight,
       'shapes': [
         for (final shape in _shapes)
           {
@@ -3301,6 +4046,12 @@ class _HomeScreenState extends State<HomeScreen> {
             if (shape.textContent != null) 'text': shape.textContent,
             if (shape.fontSize != null) 'fontSize': shape.fontSize,
             if (shape.customName != null) 'customName': shape.customName,
+            if (_encodeColor(shape.strokeColor) != null)
+              'strokeColor': _encodeColor(shape.strokeColor),
+            if (_encodeColor(shape.fillColor) != null)
+              'fillColor': _encodeColor(shape.fillColor),
+            if (shape.gridRows != null) 'gridRows': shape.gridRows,
+            if (shape.gridCols != null) 'gridCols': shape.gridCols,
           },
       ],
     };
@@ -3313,8 +4064,21 @@ class _HomeScreenState extends State<HomeScreen> {
           (data['shapes'] as List<dynamic>? ?? <dynamic>[]).map((raw) {
         return _shapeFromMap(raw as Map<String, dynamic>);
       }).toList();
+      final canvasData = data['canvas'] as Map<String, dynamic>?;
+      final restoredWidth =
+          (canvasData?['width'] as num?)?.toDouble() ??
+          (data['canvasWidth'] as num?)?.toDouble();
+      final restoredHeight =
+          (canvasData?['height'] as num?)?.toDouble() ??
+          (data['canvasHeight'] as num?)?.toDouble();
 
       setState(() {
+        if (restoredWidth != null) {
+          _canvasWidth = restoredWidth;
+        }
+        if (restoredHeight != null) {
+          _canvasHeight = restoredHeight;
+        }
         _pan = _offsetFromMap(data['pan'] as Map<String, dynamic>?);
         _zoom = (data['zoom'] as num?)?.toDouble() ?? 1.0;
         _shapes
@@ -3322,14 +4086,19 @@ class _HomeScreenState extends State<HomeScreen> {
           ..addAll(shapesData);
         _selected.clear();
         _selectedShapeIndex = -1;
+        _clampShapesToCanvas();
         if (snapshot.previewBytes != null) {
           _lastPreviewBytes = snapshot.previewBytes;
         }
       });
 
+      _syncCanvasControllers();
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${snapshot.resolvedTitle}" carregado.')),
+      showAppNotification(
+        context,
+        message: '"${snapshot.resolvedTitle}" carregado no canvas.',
+        type: AppNotificationType.success,
       );
     } catch (error, stackTrace) {
       debugPrint('Erro ao restaurar composição: $error\n$stackTrace');
@@ -3337,8 +4106,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   _PlacedShape _shapeFromMap(Map<String, dynamic> data) {
+    final asset = data['asset'] as String;
     return _PlacedShape(
-      asset: data['asset'] as String,
+      asset: asset,
       position: Offset(
         (data['x'] as num?)?.toDouble() ?? 0,
         (data['y'] as num?)?.toDouble() ?? 0,
@@ -3351,6 +4121,12 @@ class _HomeScreenState extends State<HomeScreen> {
       textContent: data['text'] as String?,
       fontSize: (data['fontSize'] as num?)?.toDouble(),
       customName: data['customName'] as String?,
+      strokeColor: _decodeColor(data['strokeColor']),
+      fillColor: _decodeColor(data['fillColor']),
+      gridRows: (data['gridRows'] as num?)?.toInt() ??
+          (asset == 'generated:grid' ? _defaultGridRows : null),
+      gridCols: (data['gridCols'] as num?)?.toInt() ??
+          (asset == 'generated:grid' ? _defaultGridCols : null),
     );
   }
 
@@ -3645,6 +4421,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return 'Círculo';
       case 'triangle':
         return 'Triângulo';
+      case 'grid':
+        return 'Grade';
       case 'line_solid':
         return 'Linha';
       case 'line_dashed':
@@ -3754,11 +4532,25 @@ class _MarqueePainter extends CustomPainter {
 // ================= Painters para shapes gerados =================
 
 class _RectPainter extends CustomPainter {
+  const _RectPainter({required this.strokeColor, this.fillColor});
+
+  final Color strokeColor;
+  final Color? fillColor;
+
   @override
   void paint(Canvas canvas, Size size) {
     final r = Rect.fromLTWH(0, 0, size.width, size.height);
+    if (fillColor != null) {
+      final fillPaint = Paint()
+        ..color = fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(r, const Radius.circular(6)),
+        fillPaint,
+      );
+    }
     final paint = Paint()
-      ..color = Colors.black
+      ..color = strokeColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawRRect(
@@ -3768,24 +4560,46 @@ class _RectPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RectPainter oldDelegate) =>
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.fillColor != fillColor;
 }
 
 class _CirclePainter extends CustomPainter {
+  const _CirclePainter({required this.strokeColor, this.fillColor});
+
+  final Color strokeColor;
+  final Color? fillColor;
+
   @override
   void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    if (fillColor != null) {
+      final fill = Paint()
+        ..color = fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(center, radius, fill);
+    }
     final paint = Paint()
-      ..color = Colors.black
+      ..color = strokeColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    canvas.drawCircle(size.center(Offset.zero), size.shortestSide / 2, paint);
+    canvas.drawCircle(center, radius, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _CirclePainter oldDelegate) =>
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.fillColor != fillColor;
 }
 
 class _TrianglePainter extends CustomPainter {
+  const _TrianglePainter({required this.strokeColor, this.fillColor});
+
+  final Color strokeColor;
+  final Color? fillColor;
+
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path()
@@ -3793,24 +4607,33 @@ class _TrianglePainter extends CustomPainter {
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
+    if (fillColor != null) {
+      final fill = Paint()
+        ..color = fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(path, fill);
+    }
     final paint = Paint()
-      ..color = Colors.black
+      ..color = strokeColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _TrianglePainter oldDelegate) =>
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.fillColor != fillColor;
 }
 
 class _LinePainter extends CustomPainter {
   final bool dashed;
-  _LinePainter({required this.dashed});
+  final Color color;
+  _LinePainter({required this.dashed, required this.color});
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black87
+      ..color = color
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
     if (!dashed) {
@@ -3834,22 +4657,35 @@ class _LinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LinePainter oldDelegate) =>
-      oldDelegate.dashed != dashed;
+      oldDelegate.dashed != dashed || oldDelegate.color != color;
 }
 
 class _BlockPainter extends CustomPainter {
+  const _BlockPainter({required this.strokeColor, this.fillColor});
+
+  final Color strokeColor;
+  final Color? fillColor;
+
   @override
   void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(1, 1, size.width - 2, size.height - 2);
+    if (fillColor != null) {
+      final fill = Paint()
+        ..color = fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawRect(rect, fill);
+    }
     final paint = Paint()
-      ..color = Colors.black
+      ..color = strokeColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    final r = Rect.fromLTWH(1, 1, size.width - 2, size.height - 2);
-    canvas.drawRect(r, paint);
+    canvas.drawRect(rect, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _BlockPainter oldDelegate) =>
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.fillColor != fillColor;
 }
 
 class _InclinedPlanePainter extends CustomPainter {
@@ -3910,10 +4746,14 @@ class _SpringPainter extends CustomPainter {
 }
 
 class _ForceVectorPainter extends CustomPainter {
+  const _ForceVectorPainter({required this.color});
+
+  final Color color;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black
+      ..color = color
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -3937,7 +4777,8 @@ class _ForceVectorPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _ForceVectorPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _ResistorPainter extends CustomPainter {
@@ -4725,4 +5566,61 @@ class _BenzenePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ColorChip extends StatelessWidget {
+  const _ColorChip({
+    required this.color,
+    required this.onTap,
+    required this.selected,
+    this.isNone = false,
+  });
+
+  final Color color;
+  final VoidCallback onTap;
+  final bool selected;
+  final bool isNone;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor =
+        selected ? AppTheme.colors.primary : Colors.grey.shade400;
+    final backgroundColor = isNone ? Colors.transparent : color;
+    final needsOutline = !isNone && color.computeLuminance() > 0.75;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: backgroundColor,
+          border: Border.all(color: borderColor, width: selected ? 2 : 1),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: borderColor.withOpacity(0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+        foregroundDecoration: needsOutline
+            ? BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade200),
+              )
+            : null,
+        child: isNone
+            ? Icon(
+                Icons.block,
+                size: 16,
+                color: Colors.grey.shade600,
+              )
+            : null,
+      ),
+    );
+  }
 }

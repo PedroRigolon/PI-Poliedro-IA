@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_navbar.dart';
+import '../../../widgets/app_notification.dart';
 import '../../auth/models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 
@@ -33,8 +34,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final user = auth.user;
-    final cachedPassword = auth.password;
 
     return Scaffold(
       backgroundColor: AppTheme.colors.background,
@@ -60,8 +59,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
             if (_view == _SettingsView.account)
               _AccountPanel(
-                user: user,
-                password: cachedPassword,
+                user: auth.user,
+                password: auth.password,
                 showPassword: _showPassword,
                 onTogglePassword: () => setState(() {
                   _showPassword = !_showPassword;
@@ -162,13 +161,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await context.read<AuthProvider>().deleteAccount();
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Conta excluída com sucesso.')),
+      showAppNotification(
+        context,
+        message: 'Conta excluída com sucesso.',
+        type: AppNotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+      showAppNotification(
+        context,
+        message: e.toString(),
+        type: AppNotificationType.danger,
       );
     }
   }
@@ -181,8 +184,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _newPasswordController.text,
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Senha atualizada com sucesso.')),
+      showAppNotification(
+        context,
+        message: 'Senha atualizada com sucesso.',
+        type: AppNotificationType.success,
       );
       _currentPasswordController.clear();
       _newPasswordController.clear();
@@ -190,8 +195,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _showPassword = false);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+      showAppNotification(
+        context,
+        message: e.toString(),
+        type: AppNotificationType.danger,
       );
     }
   }
@@ -270,11 +277,11 @@ class _AccountPanel extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: sections[0]),
-              _VerticalDivider(),
-              Expanded(child: sections[1]),
-              _VerticalDivider(),
-              Expanded(child: sections[2]),
+              for (int i = 0; i < sections.length; i++) ...[
+                Expanded(child: sections[i]),
+                if (i < sections.length - 1)
+                  SizedBox(width: AppTheme.spacing.medium),
+              ],
             ],
           );
         },
@@ -309,44 +316,44 @@ class _AccountPanel extends StatelessWidget {
         ),
       ),
       _SectionCard(
-        title: 'Atividade',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            _InfoLine(
-              label: 'Imagens criadas',
-              value: '{número}',
-            ),
-          ],
-        ),
-      ),
-      _SectionCard(
         title: 'Ações',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onLogout,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.colors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: FilledButton(
+                  onPressed: onLogout,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.colors.primary,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
+                  child: const Text('Sair da conta'),
                 ),
-                child: const Text('Sair da conta'),
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: onDelete,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.colors.primary,
-                  side: BorderSide(color: AppTheme.colors.primary),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: OutlinedButton(
+                  onPressed: onDelete,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.colors.primary,
+                    side: BorderSide(color: AppTheme.colors.primary),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child: const Text('Excluir conta'),
                 ),
-                child: const Text('Excluir conta'),
               ),
             ),
           ],
@@ -366,18 +373,6 @@ class _AccountPanel extends StatelessWidget {
       default:
         return '---';
     }
-  }
-}
-
-class _VerticalDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 220,
-      color: Colors.grey[200],
-      margin: EdgeInsets.symmetric(horizontal: AppTheme.spacing.small),
-    );
   }
 }
 
@@ -497,58 +492,63 @@ class _PasswordPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(AppTheme.spacing.large),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Form(
-        key: formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Alterar senha', style: AppTheme.typography.subtitle),
-            const SizedBox(height: 16),
-            _PasswordField(
-              label: 'Senha atual',
-              controller: currentController,
-            ),
-            const SizedBox(height: 12),
-            _PasswordField(
-              label: 'Nova senha',
-              controller: newController,
-            ),
-            const SizedBox(height: 12),
-            _PasswordField(
-              label: 'Confirmar nova senha',
-              controller: confirmController,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Confirme sua nova senha';
-                }
-                if (value != newController.text) {
-                  return 'As senhas não coincidem';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 24),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: ElevatedButton(
-                onPressed: onSubmit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.colors.primary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 12,
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Container(
+          padding: EdgeInsets.all(AppTheme.spacing.large),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Alterar senha', style: AppTheme.typography.subtitle),
+                const SizedBox(height: 16),
+                _PasswordField(
+                  label: 'Senha atual',
+                  controller: currentController,
+                ),
+                const SizedBox(height: 12),
+                _PasswordField(
+                  label: 'Nova senha',
+                  controller: newController,
+                ),
+                const SizedBox(height: 12),
+                _PasswordField(
+                  label: 'Confirmar nova senha',
+                  controller: confirmController,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Confirme sua nova senha';
+                    }
+                    if (value != newController.text) {
+                      return 'As senhas não coincidem';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: onSubmit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.colors.primary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 12,
+                      ),
+                    ),
+                    child: const Text('Salvar nova senha'),
                   ),
                 ),
-                child: const Text('Salvar nova senha'),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -572,7 +572,24 @@ class _PasswordField extends StatelessWidget {
       controller: controller,
       obscureText: true,
       validator: validator ?? _defaultValidator,
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: Colors.grey[50],
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]! ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]! ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppTheme.colors.primary),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
     );
   }
 

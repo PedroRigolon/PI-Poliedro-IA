@@ -124,6 +124,76 @@ class CollectionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> renameSession(
+    String collectionId,
+    String entryId, {
+    required String title,
+    String? notes,
+  }) async {
+    await _ensureLoaded();
+    final collectionIndex =
+        _collections.indexWhere((element) => element.id == collectionId);
+    if (collectionIndex == -1) return;
+    final collection = _collections[collectionIndex];
+    try {
+      final entry =
+          collection.sessions.firstWhere((element) => element.id == entryId);
+      await updateSnapshotMetadata(
+        entry.snapshot.id,
+        title: title,
+        notes: notes,
+      );
+    } catch (_) {
+      return;
+    }
+  }
+
+  Future<void> updateSnapshotMetadata(
+    String snapshotId, {
+    required String title,
+    String? notes,
+  }) async {
+    await _ensureLoaded();
+    final sanitizedNotes = notes?.trim();
+    final resolvedNotes = sanitizedNotes?.isEmpty == true ? null : sanitizedNotes;
+    bool modified = false;
+
+    for (var i = 0; i < _collections.length; i++) {
+      final collection = _collections[i];
+      bool collectionChanged = false;
+      final updatedSessions = <CollectionEntry>[];
+
+      for (final entry in collection.sessions) {
+        if (entry.snapshot.id == snapshotId) {
+          collectionChanged = true;
+          modified = true;
+          updatedSessions.add(
+            entry.copyWith(
+              snapshot: entry.snapshot.copyWith(
+                title: title,
+                notes: resolvedNotes,
+              ),
+            ),
+          );
+        } else {
+          updatedSessions.add(entry);
+        }
+      }
+
+      if (collectionChanged) {
+        _collections[i] = collection.copyWith(
+          sessions: updatedSessions,
+          updatedAt: DateTime.now(),
+        );
+      }
+    }
+
+    if (modified) {
+      await _persist();
+      notifyListeners();
+    }
+  }
+
   Future<void> clearAll() async {
     await _ensureLoaded();
     _collections.clear();

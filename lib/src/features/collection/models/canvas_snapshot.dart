@@ -20,6 +20,8 @@ class CanvasSnapshot {
   final String? previewBase64;
   final bool isFavorite;
 
+  static const _undefined = Object();
+
   Uint8List? get previewBytes =>
       previewBase64 == null ? null : base64Decode(previewBase64!);
 
@@ -27,8 +29,8 @@ class CanvasSnapshot {
     String? id,
     DateTime? createdAt,
     String? stateJson,
-    String? title,
-    String? notes,
+    Object? title = _undefined,
+    Object? notes = _undefined,
     String? previewBase64,
     bool? isFavorite,
   }) {
@@ -36,8 +38,8 @@ class CanvasSnapshot {
       id: id ?? this.id,
       createdAt: createdAt ?? this.createdAt,
       stateJson: stateJson ?? this.stateJson,
-      title: title ?? this.title,
-      notes: notes ?? this.notes,
+      title: identical(title, _undefined) ? this.title : title as String?,
+      notes: identical(notes, _undefined) ? this.notes : notes as String?,
       previewBase64: previewBase64 ?? this.previewBase64,
       isFavorite: isFavorite ?? this.isFavorite,
     );

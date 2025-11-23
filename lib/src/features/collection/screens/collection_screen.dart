@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_navbar.dart';
+import '../../../widgets/app_notification.dart';
 import '../../history/providers/history_provider.dart';
 import '../models/canvas_snapshot.dart';
 import '../models/collection_entry.dart';
 import '../models/user_collection.dart';
 import '../providers/collection_provider.dart';
+import '../widgets/snapshot_metadata_sheet.dart';
 
 class CollectionScreen extends StatefulWidget {
   const CollectionScreen({super.key});
@@ -50,21 +52,14 @@ class _CollectionScreenState extends State<CollectionScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : collections.isEmpty
                       ? _EmptyCollections(onCreate: _createCollection)
-                      : ListView.separated(
-                          itemCount: collections.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 16),
-                          itemBuilder: (context, index) {
-                            final collection = collections[index];
-                            return _CollectionCard(
-                              collection: collection,
-                              onAddSession: () => _addSessionFromHistory(collection.id),
-                              onRename: () => _renameCollection(collection),
-                              onDelete: () => _deleteCollection(collection),
-                              onOpenSession: _openSnapshot,
-                              onRemoveSession: (entry) =>
-                                  _removeSessionFromCollection(collection.id, entry),
-                            );
-                          },
+                      : _CollectionGrid(
+                          collections: collections,
+                          onAddSession: _addSessionFromHistory,
+                          onRenameCollection: _renameCollection,
+                          onDeleteCollection: _deleteCollection,
+                          onOpenSession: _openSnapshot,
+                          onRemoveSession: _removeSessionFromCollection,
+                          onRenameSession: _renameCollectionSession,
                         ),
             ),
           ],
@@ -161,8 +156,10 @@ class _CollectionScreenState extends State<CollectionScreen> {
     await historyProvider.initialize();
     if (!mounted) return;
     if (historyProvider.items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nenhuma sessão registrada ainda.')),
+      showAppNotification(
+        context,
+        message: 'Nenhuma sessão registrada ainda para adicionar.',
+        type: AppNotificationType.warning,
       );
       return;
     }
@@ -178,8 +175,11 @@ class _CollectionScreenState extends State<CollectionScreen> {
 
     if (!mounted) return;
     final updated = context.read<CollectionProvider>().getById(collectionId);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Sessão adicionada em "${updated?.name ?? 'Coleção'}".')),
+    if (!mounted) return;
+    showAppNotification(
+      context,
+      message: 'Sessão adicionada em "${updated?.name ?? 'Coleção'}".',
+      type: AppNotificationType.success,
     );
   }
 
@@ -209,6 +209,39 @@ class _CollectionScreenState extends State<CollectionScreen> {
         false;
     if (!confirmed || !mounted) return;
     await context.read<CollectionProvider>().removeSession(collectionId, entry.id);
+  }
+
+  Future<void> _renameCollectionSession(
+    String collectionId,
+    CollectionEntry entry,
+  ) async {
+    final meta = await showSnapshotMetadataSheet(
+      context,
+      initialTitle: entry.snapshot.resolvedTitle,
+      initialNotes: entry.snapshot.notes,
+      titleLabel: 'Renomear sessão',
+      actionLabel: 'Salvar',
+    );
+    if (meta == null || !mounted) return;
+    await context.read<CollectionProvider>().renameSession(
+          collectionId,
+          entry.id,
+          title: meta.title,
+          notes: meta.notes,
+        );
+        if (!mounted) return;
+        await context.read<HistoryProvider>().updateMetadata(
+          entry.snapshot.id,
+          title: meta.title,
+          notes: meta.notes,
+        );
+        if (!entry.snapshot.id.startsWith('history-') && mounted) {
+      await context.read<HistoryProvider>().updateMetadata(
+        'history-${entry.snapshot.id}',
+        title: meta.title,
+        notes: meta.notes,
+          );
+        }
   }
 
   Future<void> _openSnapshot(CanvasSnapshot snapshot) async {
@@ -253,14 +286,75 @@ class _CollectionScreenState extends State<CollectionScreen> {
   }
 }
 
-class _CollectionCard extends StatelessWidget {
-  const _CollectionCard({
+class _CollectionGrid extends StatelessWidget {
+  const _CollectionGrid({
+    required this.collections,
+    required this.onAddSession,
+    required this.onRenameCollection,
+    required this.onDeleteCollection,
+    required this.onOpenSession,
+    required this.onRemoveSession,
+    required this.onRenameSession,
+  });
+
+  final List<UserCollection> collections;
+  final void Function(String collectionId) onAddSession;
+  final void Function(UserCollection collection) onRenameCollection;
+  final void Function(UserCollection collection) onDeleteCollection;
+  final void Function(CanvasSnapshot snapshot) onOpenSession;
+  final void Function(String collectionId, CollectionEntry entry) onRemoveSession;
+  final void Function(String collectionId, CollectionEntry entry) onRenameSession;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = width >= 1200
+          ? 3
+          : width >= 820
+            ? 2
+            : 1;
+        final spacing = 16.0;
+        final itemWidth = crossAxisCount == 1
+            ? width
+            : (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 32),
+          child: Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: collections.map((collection) {
+              return SizedBox(
+                width: itemWidth,
+                child: _CollectionBoard(
+                  collection: collection,
+                  onAddSession: () => onAddSession(collection.id),
+                  onRename: () => onRenameCollection(collection),
+                  onDelete: () => onDeleteCollection(collection),
+                  onOpenSession: onOpenSession,
+                  onRemoveSession: (entry) => onRemoveSession(collection.id, entry),
+                  onRenameSession: (entry) => onRenameSession(collection.id, entry),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CollectionBoard extends StatelessWidget {
+  const _CollectionBoard({
     required this.collection,
     required this.onAddSession,
     required this.onRename,
     required this.onDelete,
     required this.onOpenSession,
     required this.onRemoveSession,
+    required this.onRenameSession,
   });
 
   final UserCollection collection;
@@ -269,125 +363,168 @@ class _CollectionCard extends StatelessWidget {
   final VoidCallback onDelete;
   final void Function(CanvasSnapshot snapshot) onOpenSession;
   final void Function(CollectionEntry entry) onRemoveSession;
+  final void Function(CollectionEntry entry) onRenameSession;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.symmetric(
-          horizontal: AppTheme.spacing.medium,
-          vertical: AppTheme.spacing.small,
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFDF7FA),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey[200]! ),
         ),
-        title: Text(
-          collection.name,
-          style: AppTheme.typography.subtitle.copyWith(fontSize: 18),
-        ),
-        subtitle: Text(
-          '${collection.sessions.length} sessão${collection.sessions.length == 1 ? '' : 's'}',
-        ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            switch (value) {
-              case 'rename':
-                onRename();
-                break;
-              case 'delete':
-                onDelete();
-                break;
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'rename', child: Text('Renomear')), 
-            PopupMenuItem(value: 'delete', child: Text('Excluir coleção')),
-          ],
-        ),
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: EdgeInsets.only(
-                right: AppTheme.spacing.medium,
-                bottom: AppTheme.spacing.small,
-              ),
+        padding: EdgeInsets.all(AppTheme.spacing.small + 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        collection.name,
+                        style: AppTheme.typography.subtitle.copyWith(fontSize: 20),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${collection.sessions.length} sessão${collection.sessions.length == 1 ? '' : 's'}',
+                        style: AppTheme.typography.paragraph.copyWith(fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Renomear coleção',
+                  onPressed: onRename,
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Excluir coleção',
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 220,
+              child: collection.sessions.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Nenhuma sessão ainda. Adicione uma do histórico.',
+                        style:
+                            AppTheme.typography.paragraph.copyWith(fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  : ListView.separated(
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: collection.sessions.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final entry = collection.sessions[index];
+                        return _CollectionSessionCard(
+                          entry: entry,
+                          onOpen: () => onOpenSession(entry.snapshot),
+                          onRemove: () => onRemoveSession(entry),
+                          onRename: () => onRenameSession(entry),
+                        );
+                      },
+                    ),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
               child: FilledButton.icon(
                 onPressed: onAddSession,
                 icon: const Icon(Icons.add),
                 label: const Text('Adicionar sessão'),
               ),
             ),
-          ),
-          if (collection.sessions.isEmpty)
-            Padding(
-              padding: EdgeInsets.only(
-                left: AppTheme.spacing.medium,
-                right: AppTheme.spacing.medium,
-                bottom: AppTheme.spacing.medium,
-              ),
-              child: const Text('Nenhuma sessão adicionada ainda.'),
-            )
-          else
-            Padding(
-              padding: EdgeInsets.only(
-                left: AppTheme.spacing.medium,
-                right: AppTheme.spacing.medium,
-                bottom: AppTheme.spacing.medium,
-              ),
-              child: Column(
-                children: collection.sessions
-                    .map(
-                      (entry) => _CollectionSessionTile(
-                        entry: entry,
-                        onOpen: () => onOpenSession(entry.snapshot),
-                        onRemove: () => onRemoveSession(entry),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _CollectionSessionTile extends StatelessWidget {
-  const _CollectionSessionTile({
+class _CollectionSessionCard extends StatelessWidget {
+  const _CollectionSessionCard({
     required this.entry,
     required this.onOpen,
     required this.onRemove,
+    required this.onRename,
   });
 
   final CollectionEntry entry;
   final VoidCallback onOpen;
   final VoidCallback onRemove;
+  final VoidCallback onRename;
 
   @override
   Widget build(BuildContext context) {
     final snapshot = entry.snapshot;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(vertical: 8),
-      leading: snapshot.previewBytes != null
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.memory(
-                snapshot.previewBytes!,
-                width: 56,
-                height: 56,
-                fit: BoxFit.cover,
-              ),
-            )
-          : const Icon(Icons.image_outlined, size: 32),
-      title: Text(snapshot.resolvedTitle),
-      subtitle: Text('Adicionada em ${_formatDate(entry.addedAt)}'),
-      trailing: Wrap(
-        spacing: 4,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.grey[50],
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
         children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: snapshot.previewBytes != null
+                ? Image.memory(
+                    snapshot.previewBytes!,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                  )
+                : Container(
+                    width: 64,
+                    height: 64,
+                    color: Colors.grey[200],
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.image_outlined),
+                  ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  snapshot.resolvedTitle,
+                  style: AppTheme.typography.subtitle.copyWith(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Adicionada em ${_formatDate(entry.addedAt)}',
+                  style: AppTheme.typography.paragraph.copyWith(fontSize: 13),
+                ),
+              ],
+            ),
+          ),
           IconButton(
             tooltip: 'Abrir no canvas',
             onPressed: onOpen,
             icon: const Icon(Icons.open_in_new),
+          ),
+          IconButton(
+            tooltip: 'Renomear sessão',
+            onPressed: onRename,
+            icon: const Icon(Icons.edit_outlined),
           ),
           IconButton(
             tooltip: 'Remover da coleção',
@@ -396,7 +533,6 @@ class _CollectionSessionTile extends StatelessWidget {
           ),
         ],
       ),
-      onTap: onOpen,
     );
   }
 }
