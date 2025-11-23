@@ -59,6 +59,7 @@ dependencies:
   file_saver: ^0.2.12
   image: ^4.2.0
   google_generative_ai: ^0.4.7
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
