@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/rendering.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:file_saver/file_saver.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/gestures.dart';
-import 'dart:ui' show PointerDeviceKind;
 import 'dart:math' as math;
 import 'package:image/image.dart' as img;
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../models/diagram_template.dart';
+import '../../../widgets/app_navbar.dart';
+import '../../collection/models/canvas_snapshot.dart';
+import '../../collection/providers/collection_provider.dart';
+import '../../collection/widgets/collection_picker_sheet.dart';
+import '../../collection/widgets/snapshot_metadata_sheet.dart';
+import '../../history/providers/history_provider.dart';
+import '../../../widgets/app_notification.dart';
 
 /// Simple grid painter for the empty canvas area.
 class CanvasGridPainter extends CustomPainter {
@@ -42,10 +48,13 @@ class CanvasGridPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+const double _defaultShapeExtent = 56.0;
+
 class _PlacedShape {
   final String asset;
   Offset position; // canto superior esquerdo
-  double size; // lado do quadrado
+  double width; // largura do elemento
+  double height; // altura do elemento
   double rotation; // em radianos
   bool locked;
   bool visible;
@@ -55,10 +64,26 @@ class _PlacedShape {
   double? fontSize;
   // Nome customizado (se null, usa nome padrão do asset)
   String? customName;
+  Color? strokeColor;
+  Color? fillColor;
+  int? gridRows;
+  int? gridCols;
+  double? gridCellSize;
+  // Metadados para pincel
+  List<Offset>? brushPoints; // pontos normalizados [0,1]
+  double? brushStrokeWidth;
+  Color? brushColor;
+  double? brushBoundsWidth; // largura real antes de normalizar
+  double? brushBoundsHeight; // altura real antes de normalizar
+  Offset? brushInset; // deslocamento dentro da caixa total
+  Uint8List? embeddedImageBytes;
+  static const _sentinel = Object();
+
   _PlacedShape({
     required this.asset,
     required this.position,
-    required this.size,
+    double? width,
+    double? height,
     double? rotation,
     this.locked = false,
     this.visible = true,
@@ -66,12 +91,27 @@ class _PlacedShape {
     this.textContent,
     this.fontSize,
     this.customName,
-  }) : rotation = rotation ?? 0;
+    this.strokeColor,
+    this.fillColor,
+    this.gridRows,
+    this.gridCols,
+    this.gridCellSize,
+    this.brushPoints,
+    this.brushStrokeWidth,
+    this.brushColor,
+    this.brushBoundsWidth,
+    this.brushBoundsHeight,
+    this.brushInset,
+    this.embeddedImageBytes,
+  }) : width = width ?? _defaultShapeExtent,
+       height = height ?? _defaultShapeExtent,
+       rotation = rotation ?? 0;
 
   _PlacedShape copyWith({
     String? asset,
     Offset? position,
-    double? size,
+    double? width,
+    double? height,
     double? rotation,
     bool? locked,
     bool? visible,
@@ -79,10 +119,23 @@ class _PlacedShape {
     String? textContent,
     double? fontSize,
     String? customName,
+    Object? strokeColor = _sentinel,
+    Object? fillColor = _sentinel,
+    int? gridRows,
+    int? gridCols,
+    double? gridCellSize,
+    List<Offset>? brushPoints,
+    double? brushStrokeWidth,
+    Color? brushColor,
+    double? brushBoundsWidth,
+    double? brushBoundsHeight,
+    Offset? brushInset,
+    Uint8List? embeddedImageBytes,
   }) => _PlacedShape(
     asset: asset ?? this.asset,
     position: position ?? this.position,
-    size: size ?? this.size,
+    width: width ?? this.width,
+    height: height ?? this.height,
     rotation: rotation ?? this.rotation,
     locked: locked ?? this.locked,
     visible: visible ?? this.visible,
@@ -90,10 +143,140 @@ class _PlacedShape {
     textContent: textContent ?? this.textContent,
     fontSize: fontSize ?? this.fontSize,
     customName: customName ?? this.customName,
+    strokeColor: identical(strokeColor, _sentinel)
+        ? this.strokeColor
+        : strokeColor as Color?,
+    fillColor: identical(fillColor, _sentinel)
+        ? this.fillColor
+        : fillColor as Color?,
+    gridRows: gridRows ?? this.gridRows,
+    gridCols: gridCols ?? this.gridCols,
+    gridCellSize: gridCellSize ?? this.gridCellSize,
+    brushPoints: brushPoints ?? this.brushPoints,
+    brushStrokeWidth: brushStrokeWidth ?? this.brushStrokeWidth,
+    brushColor: brushColor ?? this.brushColor,
+    brushBoundsWidth: brushBoundsWidth ?? this.brushBoundsWidth,
+    brushBoundsHeight: brushBoundsHeight ?? this.brushBoundsHeight,
+    brushInset: brushInset ?? this.brushInset,
+    embeddedImageBytes: embeddedImageBytes ?? this.embeddedImageBytes,
   );
 }
 
-// Intents para atalhos de teclado
+enum _ChatSender { user, assistant }
+
+class _ChatMessage {
+  final _ChatSender sender;
+  final String text;
+  final DateTime timestamp;
+
+  const _ChatMessage({
+    required this.sender,
+    required this.text,
+    required this.timestamp,
+  });
+}
+
+const Set<String> _strokeColorShapes = {
+  'generated:rect',
+  'generated:circle',
+  'generated:triangle',
+  'generated:block',
+  'generated:line_solid',
+  'generated:line_dashed',
+  'generated:vector',
+  'generated:grid',
+};
+
+const Set<String> _fillColorShapes = {
+  'generated:rect',
+  'generated:circle',
+  'generated:triangle',
+  'generated:block',
+};
+
+const List<Color> _shapeColorPalette = [
+  Colors.black,
+  Colors.white,
+  Color(0xFFEF4444),
+  Color(0xFFF97316),
+  Color(0xFFFACC15),
+  Color(0xFF22C55E),
+  Color(0xFF0EA5E9),
+  Color(0xFF6366F1),
+  Color(0xFFEC4899),
+  Color(0xFF94A3B8),
+];
+
+const String _buildTimeOpenAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
+const String _openAiImagesEndpoint =
+    'https://api.openai.com/v1/images/generations';
+const String _openAiModel = 'dall-e-3';
+
+String get _resolvedOpenAiApiKey {
+  final runtimeKey = dotenv.env['OPENAI_API_KEY']?.trim() ?? '';
+  if (runtimeKey.isNotEmpty) return runtimeKey;
+  final buildTimeKey = _buildTimeOpenAiApiKey.trim();
+  if (buildTimeKey.isNotEmpty) return buildTimeKey;
+  return '';
+}
+
+bool _shapeSupportsStrokeColor(String asset) =>
+    _strokeColorShapes.contains(asset);
+
+bool _shapeSupportsFillColor(String asset) => _fillColorShapes.contains(asset);
+
+const int _defaultGridRows = 4;
+const int _defaultGridCols = 4;
+const int _minGridDivisions = 1;
+const int _maxGridDivisions = 20;
+
+Color _defaultStrokeColor(String asset) {
+  switch (asset) {
+    default:
+      return Colors.black;
+  }
+}
+
+Color _resolvedStrokeColor(_PlacedShape s) {
+  return s.strokeColor ?? _defaultStrokeColor(s.asset);
+}
+
+Color? _resolvedFillColor(_PlacedShape s) {
+  if (!_shapeSupportsFillColor(s.asset)) return null;
+  return s.fillColor;
+}
+
+int? _encodeColor(Color? color) => color?.value;
+
+Color? _decodeColor(dynamic value) {
+  if (value == null) return null;
+  if (value is Color) return value;
+  if (value is int) return Color(value);
+  if (value is num) return Color(value.toInt());
+  if (value is String) {
+    final normalized = value.trim();
+    if (normalized.startsWith('#')) {
+      final hex = normalized.substring(1);
+      final parsed = int.tryParse(hex, radix: 16);
+      if (parsed != null) {
+        if (hex.length <= 6) {
+          return Color(0xFF000000 | parsed);
+        }
+        return Color(parsed);
+      }
+    }
+    final parsed = int.tryParse(normalized);
+    if (parsed != null) {
+      return Color(parsed);
+    }
+  }
+  return null;
+}
+
+int _resolvedGridRows(_PlacedShape shape) => shape.gridRows ?? _defaultGridRows;
+
+int _resolvedGridCols(_PlacedShape shape) => shape.gridCols ?? _defaultGridCols;
+
 class _DeleteShapeIntent extends Intent {
   const _DeleteShapeIntent();
 }
@@ -123,8 +306,8 @@ class _UngroupIntent extends Intent {
 }
 
 class _NudgeIntent extends Intent {
-  final Offset delta;
   const _NudgeIntent(this.delta);
+  final Offset delta;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -135,18 +318,25 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // -1 means panel closed
   int _selectedIndex = -1;
   final double _panelWidth = 360;
-  final double _shapeSize = 56; // tamanho inicial padrão
+  final double _shapeSize = _defaultShapeExtent;
   final GlobalKey _canvasKey = GlobalKey();
   final List<_PlacedShape> _shapes = [];
-  int _selectedShapeIndex = -1; // principal (retrocompatibilidade)
+  int _selectedShapeIndex = -1;
   final Set<int> _selected = <int>{};
   final FocusNode _canvasFocusNode = FocusNode();
+  static const double _defaultCanvasWidth = 1600;
+  static const double _defaultCanvasHeight = 900;
+  static const double _minCanvasDimension = 400;
+  static const double _maxCanvasDimension = 6000;
+  static const double _canvasStep = 100;
+  double _canvasWidth = _defaultCanvasWidth;
+  double _canvasHeight = _defaultCanvasHeight;
+  late final TextEditingController _canvasWidthController;
+  late final TextEditingController _canvasHeightController;
   bool _interactingWithHandle = false;
   List<_PlacedShape>? _clipboard;
-  // Zoom & Pan
   double _zoom = 1.0;
   Offset _pan = Offset.zero;
   static const double _minZoom = 0.25;
@@ -154,32 +344,23 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isPanning = false;
   bool _isMiddlePanning = false;
   Offset? _lastMiddlePanLocal;
-  static const double _scrollPanFactor = 2.5; // velocidade do pan via scroll
+  static const double _scrollPanFactor = 2.5;
   bool _ctrlHeld = false;
   bool _shiftHeld = false;
   bool _exportingTransparent = false;
   Uint8List? _lastPreviewBytes;
-  // Flag para esconder grade durante capturas / preview
+  CanvasSnapshot? _latestHistorySnapshot;
+  CanvasSnapshot? _loadedSnapshot;
   bool _suppressGridDuringCapture = false;
-  // Estado de rotação durante interação
   int? _rotatingShapeIndex;
   double _rotatingInitialRotation = 0.0;
   double _rotatingInitialAngle = 0.0;
-  // Loading overlay
   bool _isBusy = false;
   String? _busyMessage;
-
-  // Estado do painel de Assistente de Diagramas
-  String _selectedDiagramCategory = '';
-  String _selectedDiagramSubcategory = '';
-
-  // Marquee selection
   bool _isMarquee = false;
   Offset? _marqueeStart;
   Rect? _marqueeRect;
-  // Grid config
-  bool _showGrid = true; // alterna a visualização da grade
-  // Estado de expansão para materias e submaterias
+  bool _showGrid = true;
   final Map<String, bool> _materiaExpanded = {
     'Geral': true,
     'Física': true,
@@ -197,12 +378,133 @@ class _HomeScreenState extends State<HomeScreen> {
     'Inorgânica': true,
     'Termoquímica': true,
   };
+  final List<_ChatMessage> _chatMessages = [];
+  final TextEditingController _chatInputController = TextEditingController();
+  bool _isChatGenerating = false;
 
   void _toggleMateria(String materia) => setState(
     () => _materiaExpanded[materia] = !(_materiaExpanded[materia] ?? true),
   );
+
   void _toggleSub(String sub) =>
       setState(() => _subExpanded[sub] = !(_subExpanded[sub] ?? true));
+
+  @override
+  void initState() {
+    super.initState();
+    _canvasWidthController = TextEditingController(
+      text: _canvasWidth.round().toString(),
+    );
+    _canvasHeightController = TextEditingController(
+      text: _canvasHeight.round().toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _canvasWidthController.dispose();
+    _canvasHeightController.dispose();
+    _chatInputController.dispose();
+    _canvasFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is CanvasSnapshot) {
+      if (_loadedSnapshot?.id != args.id) {
+        _loadedSnapshot = args;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _restoreFromSnapshot(args);
+          }
+        });
+      }
+    }
+  }
+
+  void _applyCanvasSize({double? width, double? height}) {
+    setState(() {
+      if (width != null) {
+        _canvasWidth = width;
+      }
+      if (height != null) {
+        _canvasHeight = height;
+      }
+      _clampShapesToCanvas();
+    });
+    _syncCanvasControllers();
+  }
+
+  void _stepCanvasDimension({required bool isWidth, required double delta}) {
+    final current = isWidth ? _canvasWidth : _canvasHeight;
+    final next = (current + delta)
+        .clamp(_minCanvasDimension, _maxCanvasDimension)
+        .toDouble();
+    _applyCanvasSize(
+      width: isWidth ? next : null,
+      height: isWidth ? null : next,
+    );
+  }
+
+  void _resetCanvasSize() {
+    _applyCanvasSize(width: _defaultCanvasWidth, height: _defaultCanvasHeight);
+  }
+
+  void _syncCanvasControllers() {
+    _setControllerValue(
+      _canvasWidthController,
+      _canvasWidth.round().toString(),
+    );
+    _setControllerValue(
+      _canvasHeightController,
+      _canvasHeight.round().toString(),
+    );
+  }
+
+  void _setControllerValue(TextEditingController controller, String value) {
+    if (controller.text == value) return;
+    controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+
+  void _commitCanvasDimensionInput({required bool isWidth}) {
+    final controller = isWidth
+        ? _canvasWidthController
+        : _canvasHeightController;
+    final rawValue = controller.text.trim();
+    if (rawValue.isEmpty) {
+      _syncCanvasControllers();
+      return;
+    }
+    final parsed = double.tryParse(rawValue);
+    if (parsed == null) {
+      _syncCanvasControllers();
+      return;
+    }
+    final clamped = parsed
+        .clamp(_minCanvasDimension, _maxCanvasDimension)
+        .toDouble();
+    _applyCanvasSize(
+      width: isWidth ? clamped : null,
+      height: isWidth ? null : clamped,
+    );
+  }
+
+  void _clampShapesToCanvas() {
+    for (final shape in _shapes) {
+      final maxX = math.max(0.0, _canvasWidth - shape.width);
+      final maxY = math.max(0.0, _canvasHeight - shape.height);
+      shape.position = Offset(
+        shape.position.dx.clamp(0.0, maxX),
+        shape.position.dy.clamp(0.0, maxY),
+      );
+    }
+  }
 
   bool _isCtrlPressed() {
     final keysH = HardwareKeyboard.instance.logicalKeysPressed;
@@ -236,19 +538,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.colors.background,
-      appBar: AppBar(
-        backgroundColor: AppTheme.colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: Image.asset('assets/images/logo.png', height: 40),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.account_circle),
-            onPressed: _showProfileMenu,
-          ),
-        ],
-      ),
+      appBar: const AppNavbar(),
       body: Row(
         children: [
           // Navigation rail
@@ -502,13 +792,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                         });
                                       } else if (ctrl) {
                                         // Ctrl + Scroll: pan vertical
-                                        setState(() {
-                                          _pan += Offset(
-                                            0,
-                                            -event.scrollDelta.dy *
-                                                _scrollPanFactor,
-                                          );
-                                        });
+                                        final dy = event.scrollDelta.dy != 0
+                                            ? event.scrollDelta.dy
+                                            : event.scrollDelta.dx;
+                                        if (dy != 0) {
+                                          setState(() {
+                                            _pan += Offset(
+                                              0,
+                                              -dy * _scrollPanFactor,
+                                            );
+                                          });
+                                        }
                                       } else {
                                         // Scroll: zoom por paradas discretas no ponto do cursor
                                         final zoomIn = event.scrollDelta.dy < 0;
@@ -521,7 +815,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                   onPointerDown: (event) {
                                     // Botão do meio do mouse para pan estilo Figma
-                                    if (event.kind == PointerDeviceKind.mouse &&
+                                    if (event.kind ==
+                                            ui.PointerDeviceKind.mouse &&
                                         (event.buttons & 0x04) != 0) {
                                       setState(() {
                                         _isMiddlePanning = true;
@@ -532,7 +827,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                   onPointerMove: (event) {
                                     if (_isMiddlePanning &&
-                                        event.kind == PointerDeviceKind.mouse) {
+                                        event.kind ==
+                                            ui.PointerDeviceKind.mouse) {
                                       final last = _lastMiddlePanLocal;
                                       if (last != null) {
                                         final delta =
@@ -547,7 +843,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                   onPointerUp: (event) {
                                     if (_isMiddlePanning &&
-                                        event.kind == PointerDeviceKind.mouse) {
+                                        event.kind ==
+                                            ui.PointerDeviceKind.mouse) {
                                       setState(() {
                                         _isMiddlePanning = false;
                                         _lastMiddlePanLocal = null;
@@ -624,38 +921,49 @@ class _HomeScreenState extends State<HomeScreen> {
                                         });
                                       }
                                     },
-                                    child: ClipRect(
-                                      child: Stack(
-                                        children: [
-                                          Transform(
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        ClipRect(
+                                          child: Transform(
                                             transform: Matrix4.identity()
                                               ..translate(_pan.dx, _pan.dy)
                                               ..scale(_zoom, _zoom),
                                             alignment: Alignment.topLeft,
-                                            child: Stack(
-                                              children: [
-                                                Positioned.fill(
-                                                  child: Container(
-                                                    color: _exportingTransparent
-                                                        ? Colors.transparent
-                                                        : Colors.white,
-                                                    child: CustomPaint(
-                                                      painter:
-                                                          (_showGrid &&
-                                                              !_suppressGridDuringCapture)
-                                                          ? CanvasGridPainter()
-                                                          : null,
+                                            child: OverflowBox(
+                                              alignment: Alignment.topLeft,
+                                              minWidth: _canvasWidth,
+                                              maxWidth: _canvasWidth,
+                                              minHeight: _canvasHeight,
+                                              maxHeight: _canvasHeight,
+                                              child: SizedBox(
+                                                width: _canvasWidth,
+                                                height: _canvasHeight,
+                                                child: Stack(
+                                                  children: [
+                                                    Positioned.fill(
+                                                      child: Container(
+                                                        color:
+                                                            _exportingTransparent
+                                                            ? Colors.transparent
+                                                            : Colors.white,
+                                                        child: CustomPaint(
+                                                          painter:
+                                                              (_showGrid &&
+                                                                  !_suppressGridDuringCapture)
+                                                              ? CanvasGridPainter()
+                                                              : null,
+                                                        ),
+                                                      ),
                                                     ),
-                                                  ),
+                                                    ..._buildShapesContent(),
+                                                  ],
                                                 ),
-                                                ..._buildShapesContent(),
-
-                                                // Marquee overlay movido para fora se necessário
-                                              ],
+                                              ),
                                             ),
                                           ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -729,11 +1037,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           TextButton(
                             onPressed: _fitToContent,
                             child: const Text('Ajustar'),
-                          ),
-                          const SizedBox(width: 4),
-                          TextButton(
-                            onPressed: _resetZoom100,
-                            child: const Text('100%'),
                           ),
                           const SizedBox(width: 8),
                           const VerticalDivider(width: 12),
@@ -914,8 +1217,8 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final s in _shapes.where((s) => s.visible)) {
       minX = math.min(minX, s.position.dx);
       minY = math.min(minY, s.position.dy);
-      maxX = math.max(maxX, s.position.dx + s.size);
-      maxY = math.max(maxY, s.position.dy + s.size);
+      maxX = math.max(maxX, s.position.dx + s.width);
+      maxY = math.max(maxY, s.position.dy + s.height);
     }
     final content = Rect.fromLTRB(minX, minY, maxX, maxY);
     if (content.width <= 0 || content.height <= 0) {
@@ -978,6 +1281,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       'generated:rect',
                       'generated:circle',
                       'generated:triangle',
+                      'generated:grid',
                       'generated:line_solid',
                       'generated:line_dashed',
                     ]),
@@ -1105,6 +1409,40 @@ class _HomeScreenState extends State<HomeScreen> {
               title: const Text('Mostrar grade'),
               subtitle: const Text('Exibe linhas de apoio no canvas'),
             ),
+            const SizedBox(height: 16),
+            Text(
+              'Dimensões (px)',
+              style: AppTheme.typography.title.copyWith(fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            _buildCanvasDimensionField(
+              label: 'Largura',
+              controller: _canvasWidthController,
+              onIncrease: () =>
+                  _stepCanvasDimension(isWidth: true, delta: _canvasStep),
+              onDecrease: () =>
+                  _stepCanvasDimension(isWidth: true, delta: -_canvasStep),
+              onCommit: () => _commitCanvasDimensionInput(isWidth: true),
+            ),
+            const SizedBox(height: 12),
+            _buildCanvasDimensionField(
+              label: 'Altura',
+              controller: _canvasHeightController,
+              onIncrease: () =>
+                  _stepCanvasDimension(isWidth: false, delta: _canvasStep),
+              onDecrease: () =>
+                  _stepCanvasDimension(isWidth: false, delta: -_canvasStep),
+              onCommit: () => _commitCanvasDimensionInput(isWidth: false),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _resetCanvasSize,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Resetar dimensões'),
+              ),
+            ),
             const Divider(height: 24),
             // Outras configurações (reservado para futuras opções)
           ],
@@ -1162,7 +1500,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     border: Border.all(color: Colors.grey[300]!),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: CustomPaint(painter: _shapePainterForKey(s.asset)),
+                  child: CustomPaint(
+                    painter: _shapePainterForKey(
+                      s.asset,
+                      shape: s,
+                      strokeColor: _resolvedStrokeColor(s),
+                      fillColor: _resolvedFillColor(s),
+                    ),
+                  ),
                 )
               : Container(
                   width: 28,
@@ -1483,21 +1828,45 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Mapeia chave generated:* para painter
-  CustomPainter _shapePainterForKey(String key) {
+  CustomPainter _shapePainterForKey(
+    String key, {
+    Color? strokeColor,
+    Color? fillColor,
+    _PlacedShape? shape,
+  }) {
     final base = key.replaceFirst('generated:', '');
+    final resolvedStroke = strokeColor ?? _defaultStrokeColor(key);
     switch (base) {
       case 'rect':
-        return _RectPainter();
+        return _RectPainter(strokeColor: resolvedStroke, fillColor: fillColor);
       case 'circle':
-        return _CirclePainter();
+        return _CirclePainter(
+          strokeColor: resolvedStroke,
+          fillColor: fillColor,
+        );
       case 'triangle':
-        return _TrianglePainter();
+        return _TrianglePainter(
+          strokeColor: resolvedStroke,
+          fillColor: fillColor,
+        );
       case 'line_solid':
-        return _LinePainter(dashed: false);
+        return _LinePainter(dashed: false, color: resolvedStroke);
       case 'line_dashed':
-        return _LinePainter(dashed: true);
+        return _LinePainter(dashed: true, color: resolvedStroke);
       case 'block':
-        return _BlockPainter();
+        return _BlockPainter(strokeColor: resolvedStroke, fillColor: fillColor);
+      case 'grid':
+        final rows = shape != null
+            ? _resolvedGridRows(shape)
+            : _defaultGridRows;
+        final cols = shape != null
+            ? _resolvedGridCols(shape)
+            : _defaultGridCols;
+        return _GridShapePainter(
+          rows: rows,
+          cols: cols,
+          strokeColor: resolvedStroke,
+        );
       case 'plane':
         return _InclinedPlanePainter();
       case 'pulley':
@@ -1505,7 +1874,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'spring':
         return _SpringPainter();
       case 'vector':
-        return _ForceVectorPainter();
+        return _ForceVectorPainter(color: resolvedStroke);
       case 'resistor':
         return _ResistorPainter();
       case 'battery':
@@ -1561,7 +1930,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'benzene':
         return _BenzenePainter();
       default:
-        return _RectPainter();
+        return _RectPainter(strokeColor: resolvedStroke, fillColor: fillColor);
     }
   }
 
@@ -1587,14 +1956,35 @@ class _HomeScreenState extends State<HomeScreen> {
           _PlacedShape(
             asset: asset,
             position: position,
-            size: _shapeSize,
+            width: _shapeSize,
+            height: _shapeSize,
             textContent: 'Texto',
             fontSize: 16,
           ),
         );
+      } else if (asset == 'generated:grid') {
+        const cellSize = 48.0;
+        final cols = _defaultGridCols;
+        final rows = _defaultGridRows;
+        _shapes.add(
+          _PlacedShape(
+            asset: asset,
+            position: position,
+            width: cols * cellSize,
+            height: rows * cellSize,
+            gridRows: rows,
+            gridCols: cols,
+            gridCellSize: cellSize,
+          ),
+        );
       } else {
         _shapes.add(
-          _PlacedShape(asset: asset, position: position, size: _shapeSize),
+          _PlacedShape(
+            asset: asset,
+            position: position,
+            width: _shapeSize,
+            height: _shapeSize,
+          ),
         );
       }
     });
@@ -1609,14 +1999,17 @@ class _HomeScreenState extends State<HomeScreen> {
       minX = minX == null ? s.position.dx : math.min(minX, s.position.dx);
       minY = minY == null ? s.position.dy : math.min(minY, s.position.dy);
       maxX = maxX == null
-          ? s.position.dx + s.size
-          : math.max(maxX, s.position.dx + s.size);
+          ? s.position.dx + s.width
+          : math.max(maxX, s.position.dx + s.width);
       maxY = maxY == null
-          ? s.position.dy + s.size
-          : math.max(maxY, s.position.dy + s.size);
+          ? s.position.dy + s.height
+          : math.max(maxY, s.position.dy + s.height);
     }
     return Rect.fromLTRB(minX!, minY!, maxX!, maxY!);
   }
+
+  Offset _shapeCenter(_PlacedShape shape) =>
+      shape.position + Offset(shape.width / 2, shape.height / 2);
 
   void _applyMarqueeSelection() {
     if (_marqueeRect == null) return;
@@ -1624,7 +2017,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _selected.clear();
     for (int i = 0; i < _shapes.length; i++) {
       final s = _shapes[i];
-      final rect = Rect.fromLTWH(s.position.dx, s.position.dy, s.size, s.size);
+      final rect = Rect.fromLTWH(
+        s.position.dx,
+        s.position.dy,
+        s.width,
+        s.height,
+      );
       if (r.overlaps(rect) ||
           r.contains(rect.topLeft) ||
           r.contains(rect.bottomRight)) {
@@ -1632,6 +2030,24 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     _selectedShapeIndex = _selected.isNotEmpty ? _selected.last : -1;
+  }
+
+  void _adjustGridDivision({required bool isRows, required int delta}) {
+    if (_selected.length != 1) return;
+    final shape = _shapes[_selected.first];
+    if (shape.asset != 'generated:grid') return;
+    final current = isRows
+        ? _resolvedGridRows(shape)
+        : _resolvedGridCols(shape);
+    final next = (current + delta).clamp(_minGridDivisions, _maxGridDivisions);
+    if (next == current) return;
+    setState(() {
+      if (isRows) {
+        shape.gridRows = next;
+      } else {
+        shape.gridCols = next;
+      }
+    });
   }
 
   List<Widget> _buildSelectionToolbar() {
@@ -1914,26 +2330,354 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _nudgeSelected(Offset delta) {
     if (_selected.isEmpty) return;
-    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-    final sizeCanvas = box?.size;
     setState(() {
       for (final i in _selected) {
         final shp = _shapes[i];
         if (shp.locked) continue;
         shp.position += delta;
-        if (sizeCanvas != null) {
-          final maxX = sizeCanvas.width - shp.size;
-          final maxY = sizeCanvas.height - shp.size;
-          shp.position = Offset(
-            shp.position.dx.clamp(0.0, maxX),
-            shp.position.dy.clamp(0.0, maxY),
-          );
-        }
+        final maxX = math.max(0.0, _canvasWidth - shp.width);
+        final maxY = math.max(0.0, _canvasHeight - shp.height);
+        shp.position = Offset(
+          shp.position.dx.clamp(0.0, maxX),
+          shp.position.dy.clamp(0.0, maxY),
+        );
       }
     });
   }
 
+  void _scaleSelectedShapes(double factor) {
+    if (_selected.isEmpty || factor <= 0) return;
+    setState(() {
+      for (final idx in _selected) {
+        final shape = _shapes[idx];
+        if (shape.locked) continue;
+        final center = _shapeCenter(shape);
+        if (shape.asset == 'generated:text') {
+          final baseFont = shape.fontSize ?? 16;
+          shape.fontSize = (baseFont * factor).clamp(8.0, 240.0);
+          _autoResizeTextShape(shape);
+        } else {
+          shape.width = (shape.width * factor).clamp(16.0, _canvasWidth);
+          shape.height = (shape.height * factor).clamp(16.0, _canvasHeight);
+        }
+        shape.position = center - Offset(shape.width / 2, shape.height / 2);
+        final maxX = math.max(0.0, _canvasWidth - shape.width);
+        final maxY = math.max(0.0, _canvasHeight - shape.height);
+        shape.position = Offset(
+          shape.position.dx.clamp(0.0, maxX),
+          shape.position.dy.clamp(0.0, maxY),
+        );
+      }
+    });
+  }
+
+  Future<Uint8List> _generateImageFromPrompt(String prompt) async {
+    final apiKey = _resolvedOpenAiApiKey.trim();
+    if (apiKey.isEmpty) {
+      throw Exception('API key não configurada.');
+    }
+    final payload = jsonEncode({
+      'model': _openAiModel,
+      'prompt': prompt,
+      'size': '1024x1024',
+      'response_format': 'b64_json',
+    });
+    final response = await http
+        .post(
+          Uri.parse(_openAiImagesEndpoint),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+          body: payload,
+        )
+        .timeout(const Duration(seconds: 90));
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = decoded['data'] as List<dynamic>?;
+      if (data == null || data.isEmpty) {
+        throw Exception('Resposta sem imagem.');
+      }
+      final first = data.first as Map<String, dynamic>;
+      final base64Image = first['b64_json'] as String?;
+      if (base64Image == null || base64Image.isEmpty) {
+        throw Exception('Formato de imagem inválido.');
+      }
+      return base64Decode(base64Image);
+    } else {
+      String? detail;
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        detail = body['error']?['message'] as String?;
+      } catch (_) {}
+      throw Exception(
+        detail ?? 'Falha ${response.statusCode} ao gerar imagem.',
+      );
+    }
+  }
+
+  void _placeGeneratedImageOnCanvas(Uint8List bytes) {
+    final baseSize = math.min(_canvasWidth, _canvasHeight) * 0.35;
+    final clampedSize = baseSize.clamp(200.0, 480.0);
+    final center = Offset(_canvasWidth / 2, _canvasHeight / 2);
+    final shape = _PlacedShape(
+      asset: 'generated:image',
+      position: center - Offset(clampedSize / 2, clampedSize / 2),
+      width: clampedSize,
+      height: clampedSize,
+      embeddedImageBytes: bytes,
+    );
+    _shapes.add(shape);
+    _selected
+      ..clear()
+      ..add(_shapes.length - 1);
+    _selectedShapeIndex = _shapes.length - 1;
+  }
+
+  String _friendlyAiError(Object error) {
+    if (error is TimeoutException) {
+      return 'Tempo limite excedido. Tente novamente.';
+    }
+    final text = error.toString();
+    if (text.contains('API key não configurada')) {
+      return 'Configure sua API key da OpenAI antes de gerar imagens.';
+    }
+    return text.replaceFirst('Exception: ', '');
+  }
+
   // Função de alinhamento removida da toolbar (mantida anteriormente); poderá ser reintroduzida em um painel dedicado.
+
+  Future<void> _handleChatSend() async {
+    if (_isChatGenerating) return;
+    final text = _chatInputController.text.trim();
+    if (text.isEmpty) return;
+    final userMessage = _ChatMessage(
+      sender: _ChatSender.user,
+      text: text,
+      timestamp: DateTime.now(),
+    );
+    setState(() {
+      _chatMessages.add(userMessage);
+      _chatInputController.clear();
+      _isChatGenerating = true;
+    });
+    try {
+      final bytes = await _generateImageFromPrompt(text);
+      if (!mounted) return;
+      setState(() {
+        _placeGeneratedImageOnCanvas(bytes);
+        _chatMessages.add(
+          _ChatMessage(
+            sender: _ChatSender.assistant,
+            text:
+                'Imagem criada com sucesso e posicionada no centro do canvas. Ajuste o tamanho conforme necessário.',
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+    } catch (error, stack) {
+      debugPrint('Falha IA: $error\n$stack');
+      if (!mounted) return;
+      setState(() {
+        _chatMessages.add(
+          _ChatMessage(
+            sender: _ChatSender.assistant,
+            text:
+                'Não consegui gerar a imagem agora. ${_friendlyAiError(error)}',
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isChatGenerating = false);
+      }
+    }
+  }
+
+  Widget _buildChatBubble(_ChatMessage message) {
+    final isUser = message.sender == _ChatSender.user;
+    final color = isUser
+        ? AppTheme.colors.primary.withValues(alpha: 0.12)
+        : Colors.grey[200]!;
+    final textColor = isUser ? AppTheme.colors.primary : Colors.black87;
+    final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
+    final radius = BorderRadius.only(
+      topLeft: const Radius.circular(14),
+      topRight: const Radius.circular(14),
+      bottomLeft: Radius.circular(isUser ? 14 : 4),
+      bottomRight: Radius.circular(isUser ? 4 : 14),
+    );
+    return Align(
+      alignment: alignment,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: color, borderRadius: radius),
+        child: Text(
+          message.text,
+          style: TextStyle(color: textColor, fontSize: 13, height: 1.4),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIaInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.colors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome, color: AppTheme.colors.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Resumo inteligente',
+                style: AppTheme.typography.title.copyWith(fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Receba dicas rápidas antes de inserir formas. Compartilhe objetivos, restrições ou hipóteses e o chatbot guarda o contexto.',
+            style: AppTheme.typography.paragraph.copyWith(fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildInfoTag('Fluxos de física'),
+              _buildInfoTag('Esquemas elétricos'),
+              _buildInfoTag('Experimentação química'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIaChatbot() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+        color: Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.chat_bubble_outline,
+                color: Colors.grey[700],
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Chat rápido',
+                style: AppTheme.typography.title.copyWith(fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 240),
+            child: _chatMessages.isEmpty
+                ? Center(
+                    child: Text(
+                      'Envie a primeira mensagem para receber sugestões.',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : ListView(
+                    reverse: true,
+                    shrinkWrap: true,
+                    children: _chatMessages.reversed
+                        .map(_buildChatBubble)
+                        .toList(),
+                  ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _chatInputController,
+                  minLines: 1,
+                  maxLines: 3,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) {
+                    if (!_isChatGenerating) {
+                      _handleChatSend();
+                    }
+                  },
+                  decoration: const InputDecoration(
+                    hintText: 'Descreva o que precisa ou faça uma pergunta',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _isChatGenerating ? null : _handleChatSend,
+                style: IconButton.styleFrom(
+                  backgroundColor: AppTheme.colors.primary,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: AppTheme.colors.primary.withValues(
+                    alpha: 0.3,
+                  ),
+                  disabledForegroundColor: Colors.white70,
+                ),
+                icon: _isChatGenerating
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.send, size: 18),
+                tooltip: _isChatGenerating
+                    ? 'Gerando imagem...'
+                    : 'Enviar mensagem',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoTag(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: AppTheme.colors.primary,
+          fontWeight: FontWeight.w600,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
 
   Rect _canvasRectToScreen(Rect r) {
     final tl = _pan + Offset(r.left, r.top) * _zoom;
@@ -1948,21 +2692,22 @@ class _HomeScreenState extends State<HomeScreen> {
     double minX = double.infinity, minY = double.infinity;
     double maxX = -double.infinity, maxY = -double.infinity;
     for (final s in visibles) {
-      final c = s.position + Offset(s.size / 2, s.size / 2);
-      final h = s.size / 2;
+      final center = s.position + Offset(s.width / 2, s.height / 2);
+      final halfW = s.width / 2;
+      final halfH = s.height / 2;
       final cosA = math.cos(s.rotation);
       final sinA = math.sin(s.rotation);
       // 4 cantos relativos ao centro
       final corners =
           <Offset>[
-            Offset(-h, -h),
-            Offset(h, -h),
-            Offset(h, h),
-            Offset(-h, h),
+            Offset(-halfW, -halfH),
+            Offset(halfW, -halfH),
+            Offset(halfW, halfH),
+            Offset(-halfW, halfH),
           ].map(
             (p) =>
                 Offset(cosA * p.dx - sinA * p.dy, sinA * p.dx + cosA * p.dy) +
-                c,
+                center,
           );
       for (final p in corners) {
         if (p.dx < minX) minX = p.dx;
@@ -1978,6 +2723,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return rect;
   }
 
+  void _handleShapeDoubleTap(_PlacedShape shape, int index) {
+    if (_interactingWithHandle) return;
+    if (shape.asset != 'generated:text') return;
+    setState(() {
+      _selected
+        ..clear()
+        ..add(index);
+      _selectedShapeIndex = index;
+      _selectedIndex = 3; // abre painel de propriedades
+    });
+  }
+
   List<Widget> _buildShapesContent() {
     return _shapes.asMap().entries.where((e) => e.value.visible).map((entry) {
       final index = entry.key;
@@ -1989,8 +2746,8 @@ class _HomeScreenState extends State<HomeScreen> {
       return Positioned(
         left: s.position.dx - outerPad,
         top: s.position.dy - outerPad,
-        width: s.size + outerPad * 2,
-        height: s.size + outerPad * 2,
+        width: s.width + outerPad * 2,
+        height: s.height + outerPad * 2,
         child: IgnorePointer(
           ignoring: _selectedIndex >= 0,
           child: MouseRegion(
@@ -2032,6 +2789,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
                 _canvasFocusNode.requestFocus();
               },
+              onDoubleTap: () => _handleShapeDoubleTap(s, index),
               onPanStart: (_) {
                 if (_interactingWithHandle) return;
                 setState(() {
@@ -2057,18 +2815,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       final shp = _shapes[sel];
                       if (shp.locked) continue;
                       shp.position += delta;
-                      final renderBox =
-                          _canvasKey.currentContext?.findRenderObject()
-                              as RenderBox?;
-                      if (renderBox != null) {
-                        final sizeCanvas = renderBox.size;
-                        final maxX = sizeCanvas.width - shp.size;
-                        final maxY = sizeCanvas.height - shp.size;
-                        shp.position = Offset(
-                          shp.position.dx.clamp(0.0, maxX),
-                          shp.position.dy.clamp(0.0, maxY),
-                        );
-                      }
+                      final maxX = math.max(0.0, _canvasWidth - shp.width);
+                      final maxY = math.max(0.0, _canvasHeight - shp.height);
+                      shp.position = Offset(
+                        shp.position.dx.clamp(0.0, maxX),
+                        shp.position.dy.clamp(0.0, maxY),
+                      );
                     }
                   });
                 }
@@ -2079,8 +2831,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Positioned(
                     left: outerPad,
                     top: outerPad,
-                    width: s.size,
-                    height: s.size,
+                    width: s.width,
+                    height: s.height,
                     child: Transform.rotate(
                       angle: s.rotation,
                       child: Container(
@@ -2094,22 +2846,39 @@ class _HomeScreenState extends State<HomeScreen> {
                               )
                             : null,
                         padding: EdgeInsets.all(isSelected ? 2 : 0),
-                        child: s.asset.startsWith('generated:')
-                            ? CustomPaint(
-                                painter: s.asset == 'generated:text'
-                                    ? _TextShapePainter(
+                        child: s.embeddedImageBytes != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.memory(
+                                  s.embeddedImageBytes!,
+                                  fit: BoxFit.cover,
+                                  gaplessPlayback: true,
+                                ),
+                              )
+                            : s.asset.startsWith('generated:')
+                            ? (s.asset == 'generated:text'
+                                  ? CustomPaint(
+                                      painter: _TextShapePainter(
                                         text: s.textContent ?? 'Texto',
                                         fontSize: s.fontSize ?? 16,
-                                      )
-                                    : _shapePainterForKey(s.asset),
-                                size: Size.infinite,
-                              )
+                                      ),
+                                      size: Size.infinite,
+                                    )
+                                  : CustomPaint(
+                                      painter: _shapePainterForKey(
+                                        s.asset,
+                                        shape: s,
+                                        strokeColor: _resolvedStrokeColor(s),
+                                        fillColor: _resolvedFillColor(s),
+                                      ),
+                                      size: Size.infinite,
+                                    ))
                             : Image.asset(
                                 s.asset,
                                 fit: BoxFit.contain,
                                 errorBuilder: (context, error, stack) => Icon(
                                   Icons.crop_square,
-                                  size: s.size * 0.6,
+                                  size: math.min(s.width, s.height) * 0.6,
                                   color: Colors.grey[400],
                                 ),
                               ),
@@ -2163,8 +2932,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _interactingWithHandle = true;
                           _rotatingShapeIndex = index;
                           _rotatingInitialRotation = s.rotation;
-                          final center =
-                              s.position + Offset(s.size / 2, s.size / 2);
+                          final center = _shapeCenter(s);
                           final box =
                               _canvasKey.currentContext?.findRenderObject()
                                   as RenderBox?;
@@ -2193,8 +2961,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                         onPanUpdate: (details) {
                           setState(() {
-                            final center =
-                                s.position + Offset(s.size / 2, s.size / 2);
+                            final center = _shapeCenter(s);
                             final box =
                                 _canvasKey.currentContext?.findRenderObject()
                                     as RenderBox?;
@@ -2237,101 +3004,177 @@ class _HomeScreenState extends State<HomeScreen> {
                     Positioned(
                       bottom: outerPad - (handleSize / 2),
                       right: outerPad - (handleSize / 2),
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onPanDown: (_) => _interactingWithHandle = true,
-                        onPanCancel: () => _interactingWithHandle = false,
-                        onPanEnd: (_) => _interactingWithHandle = false,
-                        onPanUpdate: (details) {
-                          setState(() {
-                            final keys =
-                                HardwareKeyboard.instance.logicalKeysPressed;
-                            final keepProportion =
-                                keys.contains(LogicalKeyboardKey.shiftLeft) ||
-                                keys.contains(LogicalKeyboardKey.shiftRight);
-                            if (_selected.length <= 1) {
-                              final rawDelta = keepProportion
-                                  ? (details.delta.dx.abs() >=
-                                            details.delta.dy.abs()
-                                        ? details.delta.dx
-                                        : details.delta.dy)
-                                  : details.delta.dx;
-                              double newSize = s.size + rawDelta / _zoom;
-                              newSize = newSize.clamp(24.0, 320.0);
-                              final renderBox =
-                                  _canvasKey.currentContext?.findRenderObject()
-                                      as RenderBox?;
-                              if (renderBox != null) {
-                                final sizeCanvas = renderBox.size;
-                                if (s.position.dx + newSize >
-                                    sizeCanvas.width) {
-                                  newSize = sizeCanvas.width - s.position.dx;
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.resizeDownRight,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onPanDown: (_) => _interactingWithHandle = true,
+                          onPanCancel: () => _interactingWithHandle = false,
+                          onPanEnd: (_) => _interactingWithHandle = false,
+                          onPanUpdate: (details) {
+                            setState(() {
+                              final keys =
+                                  HardwareKeyboard.instance.logicalKeysPressed;
+                              final keepProportion =
+                                  keys.contains(LogicalKeyboardKey.shiftLeft) ||
+                                  keys.contains(LogicalKeyboardKey.shiftRight);
+                              if (_selected.length <= 1) {
+                                if (s.asset == 'generated:text') {
+                                  final dominantDelta = keepProportion
+                                      ? (details.delta.dx.abs() >=
+                                                details.delta.dy.abs()
+                                            ? details.delta.dx
+                                            : details.delta.dy)
+                                      : details.delta.dx;
+                                  final currentFont = s.fontSize ?? 16;
+                                  final nextFont =
+                                      (currentFont + dominantDelta / _zoom)
+                                          .clamp(8.0, 240.0);
+                                  s.fontSize = nextFont;
+                                  _autoResizeTextShape(s);
+                                  final maxWidth = _canvasWidth - s.position.dx;
+                                  final maxHeight =
+                                      _canvasHeight - s.position.dy;
+                                  if ((s.width > maxWidth ||
+                                          s.height > maxHeight) &&
+                                      maxWidth > 24 &&
+                                      maxHeight > 24) {
+                                    final factor = math.min(
+                                      maxWidth / s.width,
+                                      maxHeight / s.height,
+                                    );
+                                    s.fontSize = ((s.fontSize ?? 16) * factor)
+                                        .clamp(8.0, 240.0);
+                                    _autoResizeTextShape(s);
+                                  }
+                                  return;
                                 }
-                                if (s.position.dy + newSize >
-                                    sizeCanvas.height) {
-                                  newSize = sizeCanvas.height - s.position.dy;
-                                }
-                              }
-                              if (keepProportion) {
-                                newSize = (newSize / 8).round() * 8;
-                              }
-                              s.size = newSize;
-                            } else {
-                              final bounds = _selectionBounds();
-                              if (bounds == null) return;
-                              final anchor = bounds.topLeft;
-                              final cur = bounds.bottomRight;
-                              final newBR = cur + details.delta / _zoom;
-                              final newW = (newBR.dx - anchor.dx).clamp(
-                                24.0,
-                                double.infinity,
-                              );
-                              final newH = (newBR.dy - anchor.dy).clamp(
-                                24.0,
-                                double.infinity,
-                              );
-                              final sx = newW / bounds.width;
-                              final sy = newH / bounds.height;
-                              final scale = keepProportion
-                                  ? math.min(sx, sy)
-                                  : math.min(sx, sy);
-                              final center = bounds.center;
-                              for (final idx in _selected) {
-                                final shp = _shapes[idx];
-                                if (shp.locked) continue;
-                                final rel =
-                                    shp.position +
-                                    Offset(shp.size / 2, shp.size / 2) -
-                                    center;
-                                final relScaled = rel * scale;
-                                shp.size = (shp.size * scale).clamp(
+                                final delta = details.delta / _zoom;
+                                double targetWidth = (s.width + delta.dx).clamp(
                                   16.0,
                                   640.0,
                                 );
-                                shp.position =
-                                    center +
-                                    relScaled -
-                                    Offset(shp.size / 2, shp.size / 2);
+                                double targetHeight = (s.height + delta.dy)
+                                    .clamp(16.0, 640.0);
+                                if (keepProportion) {
+                                  final scale = math.min(
+                                    targetWidth / s.width,
+                                    targetHeight / s.height,
+                                  );
+                                  targetWidth = (s.width * scale).clamp(
+                                    16.0,
+                                    640.0,
+                                  );
+                                  targetHeight = (s.height * scale).clamp(
+                                    16.0,
+                                    640.0,
+                                  );
+                                }
+                                final availableWidth = math.max(
+                                  16.0,
+                                  _canvasWidth - s.position.dx,
+                                );
+                                final availableHeight = math.max(
+                                  16.0,
+                                  _canvasHeight - s.position.dy,
+                                );
+                                targetWidth = math.min(
+                                  targetWidth,
+                                  availableWidth,
+                                );
+                                targetHeight = math.min(
+                                  targetHeight,
+                                  availableHeight,
+                                );
+                                s.width = targetWidth;
+                                s.height = targetHeight;
+                              } else {
+                                final bounds = _selectionBounds();
+                                if (bounds == null ||
+                                    bounds.width <= 0 ||
+                                    bounds.height <= 0) {
+                                  return;
+                                }
+                                final anchor = bounds.topLeft;
+                                final cur = bounds.bottomRight;
+                                final newBR = cur + details.delta / _zoom;
+                                final newW = (newBR.dx - anchor.dx).clamp(
+                                  24.0,
+                                  double.infinity,
+                                );
+                                final newH = (newBR.dy - anchor.dy).clamp(
+                                  24.0,
+                                  double.infinity,
+                                );
+                                final scaleX = newW / bounds.width;
+                                final scaleY = newH / bounds.height;
+                                final uniformScale = keepProportion
+                                    ? math.min(scaleX, scaleY)
+                                    : null;
+                                final sx = keepProportion
+                                    ? uniformScale!
+                                    : scaleX;
+                                final sy = keepProportion
+                                    ? uniformScale!
+                                    : scaleY;
+                                final center = bounds.center;
+                                for (final idx in _selected) {
+                                  final shp = _shapes[idx];
+                                  if (shp.locked) continue;
+                                  final rel = _shapeCenter(shp) - center;
+                                  final relScaled = Offset(
+                                    rel.dx * sx,
+                                    rel.dy * sy,
+                                  );
+                                  if (shp.asset == 'generated:text') {
+                                    final updatedFont =
+                                        ((shp.fontSize ?? 16) *
+                                                math.min(sx, sy))
+                                            .clamp(8.0, 240.0);
+                                    shp.fontSize = updatedFont;
+                                    _autoResizeTextShape(shp);
+                                  } else {
+                                    shp.width = (shp.width * sx).clamp(
+                                      16.0,
+                                      640.0,
+                                    );
+                                    shp.height = (shp.height * sy).clamp(
+                                      16.0,
+                                      640.0,
+                                    );
+                                  }
+                                  shp.position =
+                                      center +
+                                      relScaled -
+                                      Offset(shp.width / 2, shp.height / 2);
+                                }
                               }
-                            }
-                          });
-                        },
-                        child: Container(
-                          width: handleSize + 10,
-                          height: handleSize + 10,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(
-                              color: AppTheme.colors.primary,
-                              width: 1.2,
+                            });
+                          },
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(
+                                color: AppTheme.colors.primary,
+                                width: 1.2,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 3,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
                             ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.open_in_full,
-                            size: 14,
-                            color: Colors.black87,
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.open_in_full,
+                              size: 16,
+                              color: Colors.black87,
+                            ),
                           ),
                         ),
                       ),
@@ -2346,100 +3189,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
   }
 
-  void _showProfileMenu() {
-    showMenu(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        MediaQuery.of(context).size.width,
-        kToolbarHeight,
-        0,
-        0,
-      ),
-      items: [
-        PopupMenuItem(
-          child: const Text('Configurações'),
-          onTap: () {
-            // Necessário post-frame para não conflitar com o menu
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) Navigator.pushNamed(context, '/settings');
-            });
-          },
-        ),
-        PopupMenuItem(
-          child: const Text('Coleção'),
-          onTap: () {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) Navigator.pushNamed(context, '/collection');
-            });
-          },
-        ),
-        PopupMenuItem(
-          child: const Text('Histórico'),
-          onTap: () {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) Navigator.pushNamed(context, '/history');
-            });
-          },
-        ),
-        PopupMenuItem(
-          enabled: false,
-          child: SizedBox(
-            width: 180,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.logout, size: 18),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.colors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              onPressed: () async {
-                Navigator.pop(context); // fechar menu antes do diálogo
-                final auth = context.read<AuthProvider>();
-                final confirm = await _confirmLogout();
-                if (confirm) {
-                  await auth.logout();
-                  if (mounted) {
-                    Navigator.pushReplacementNamed(context, '/login');
-                  }
-                }
-              },
-              label: const Text('Sair'),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<bool> _confirmLogout() async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (ctx) {
-            return AlertDialog(
-              title: const Text('Confirmar saída'),
-              content: const Text('Deseja realmente sair da conta?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.colors.primary,
-                  ),
-                  child: const Text('Sair'),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-  }
-
   // ===== IA Panel =====
   Widget _buildIaPanel() {
-    final categories = DiagramTemplateLibrary.getCategories();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2447,7 +3198,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Assistente de Diagramas',
+              'Assistente IA',
               style: AppTheme.typography.title.copyWith(fontSize: 20),
             ),
             IconButton(
@@ -2457,260 +3208,17 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         SizedBox(height: AppTheme.spacing.medium),
-
-        // Lista de categorias e subcategorias
         Expanded(
           child: ListView(
             children: [
-              for (final category in categories) ...[
-                _buildDiagramCategoryHeader(category),
-                if (_selectedDiagramCategory == category) ...[
-                  for (final subcategory
-                      in DiagramTemplateLibrary.getSubcategories(category))
-                    _buildDiagramSubcategorySection(category, subcategory),
-                ],
-              ],
+              _buildIaInfoCard(),
+              SizedBox(height: AppTheme.spacing.medium),
+              _buildIaChatbot(),
             ],
           ),
         ),
       ],
     );
-  }
-
-  Widget _buildDiagramCategoryHeader(String category) {
-    final isExpanded = _selectedDiagramCategory == category;
-
-    // Ícones por categoria
-    IconData getCategoryIcon() {
-      switch (category) {
-        case 'Fisica':
-          return Icons.science;
-        case 'Quimica':
-          return Icons.biotech;
-        case 'Geral':
-          return Icons.category;
-        default:
-          return Icons.folder;
-      }
-    }
-
-    return InkWell(
-      onTap: () {
-        setState(() {
-          if (isExpanded) {
-            _selectedDiagramCategory = '';
-            _selectedDiagramSubcategory = '';
-          } else {
-            _selectedDiagramCategory = category;
-            _selectedDiagramSubcategory = '';
-          }
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: isExpanded ? AppTheme.colors.primary.withOpacity(0.1) : null,
-          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
-        ),
-        child: Row(
-          children: [
-            Icon(getCategoryIcon(), color: AppTheme.colors.primary, size: 22),
-            const SizedBox(width: 12),
-            Text(
-              category,
-              style: AppTheme.typography.label.copyWith(
-                fontWeight: FontWeight.bold,
-                color: isExpanded ? AppTheme.colors.primary : Colors.black87,
-              ),
-            ),
-            const Spacer(),
-            Icon(
-              isExpanded ? Icons.expand_more : Icons.chevron_right,
-              color: AppTheme.colors.primary,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDiagramSubcategorySection(String category, String subcategory) {
-    final isExpanded = _selectedDiagramSubcategory == subcategory;
-
-    return Column(
-      children: [
-        InkWell(
-          onTap: () {
-            setState(() {
-              if (isExpanded) {
-                _selectedDiagramSubcategory = '';
-              } else {
-                _selectedDiagramSubcategory = subcategory;
-              }
-            });
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
-            color: isExpanded
-                ? AppTheme.colors.secondary.withOpacity(0.1)
-                : Colors.grey[50],
-            child: Row(
-              children: [
-                Icon(
-                  isExpanded ? Icons.expand_more : Icons.chevron_right,
-                  size: 20,
-                  color: AppTheme.colors.secondary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  subcategory,
-                  style: AppTheme.typography.paragraph.copyWith(
-                    fontSize: 16,
-                    fontWeight: isExpanded
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (isExpanded) ...[
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              children: [
-                for (final template
-                    in DiagramTemplateLibrary.getTemplatesBySubcategory(
-                      category,
-                      subcategory,
-                    ))
-                  _buildDiagramTemplateCard(template),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildDiagramTemplateCard(DiagramTemplate template) {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: () => _insertDiagramTemplate(template),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(template.icon, color: AppTheme.colors.primary, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      template.name,
-                      style: AppTheme.typography.paragraph.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                template.description,
-                style: AppTheme.typography.paragraph.copyWith(
-                  fontSize: 13,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.layers, size: 14, color: Colors.grey[500]),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${template.shapes.length} elementos',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    Icons.add_circle,
-                    color: AppTheme.colors.primary,
-                    size: 20,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Insere um template de diagrama no canvas
-  void _insertDiagramTemplate(DiagramTemplate template) {
-    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return;
-
-    // Calcula o centro da viewport (considerando zoom e pan)
-    final viewportSize = box.size;
-    final viewportCenter = viewportSize.center(Offset.zero);
-
-    // Converte para coordenadas do canvas (considerando zoom e pan)
-    final canvasCenter = (viewportCenter - _pan) / _zoom;
-
-    setState(() {
-      // Limpa a seleção atual
-      _selected.clear();
-      _selectedShapeIndex = -1;
-
-      // Índice inicial das novas formas
-      final startIndex = _shapes.length;
-
-      // Para cada forma no template
-      for (final templateShape in template.shapes) {
-        // Converte posição relativa (-1 a 1) para posição absoluta no canvas
-        // Usamos um espaço de 200px como referência para o diagrama
-        final diagramSpacing = 200.0;
-        final absoluteX =
-            canvasCenter.dx + (templateShape.relativeX * diagramSpacing);
-        final absoluteY =
-            canvasCenter.dy + (templateShape.relativeY * diagramSpacing);
-
-        // Cria e adiciona a forma
-        _shapes.add(
-          _PlacedShape(
-            asset: templateShape.asset,
-            position: Offset(
-              absoluteX - templateShape.size / 2,
-              absoluteY - templateShape.size / 2,
-            ),
-            size: templateShape.size,
-            rotation: templateShape.rotation,
-            textContent: templateShape.textContent,
-            fontSize: templateShape.fontSize,
-            customName: templateShape.customName,
-          ),
-        );
-      }
-
-      // Seleciona automaticamente todas as formas recém-adicionadas
-      final endIndex = _shapes.length;
-      for (int i = startIndex; i < endIndex; i++) {
-        _selected.add(i);
-      }
-
-      // Se houver apenas uma forma, define como seleção principal
-      if (template.shapes.length == 1) {
-        _selectedShapeIndex = startIndex;
-      }
-    });
   }
 
   // ===== Properties Panel =====
@@ -2753,15 +3261,55 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _buildPropertySection('Dimensões', [
                       _buildNumberField(
-                        'Tamanho',
-                        _getCommonValue((s) => s.size),
+                        'Largura',
+                        _getCommonValue((s) => s.width),
                         (v) {
                           setState(() {
                             _updateSelectedShapes(
-                              (s) => s.size = v.clamp(16.0, 640.0),
+                              (s) => s.width = v.clamp(16.0, 640.0),
                             );
                           });
                         },
+                      ),
+                      const SizedBox(height: 8),
+                      _buildNumberField(
+                        'Altura',
+                        _getCommonValue((s) => s.height),
+                        (v) {
+                          setState(() {
+                            _updateSelectedShapes(
+                              (s) => s.height = v.clamp(16.0, 640.0),
+                            );
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Escala proporcional',
+                        style: AppTheme.typography.title.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.remove),
+                              label: const Text('Reduzir'),
+                              onPressed: () => _scaleSelectedShapes(0.9),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.add),
+                              label: const Text('Aumentar'),
+                              onPressed: () => _scaleSelectedShapes(1.1),
+                            ),
+                          ),
+                        ],
                       ),
                     ]),
                     const Divider(height: 24),
@@ -2815,6 +3363,51 @@ class _HomeScreenState extends State<HomeScreen> {
                         subtitle: const Text('Exibir no canvas'),
                       ),
                     ]),
+                    if (_selectionSupportsStrokeEditing()) ...[
+                      const Divider(height: 24),
+                      _buildPropertySection('Aparência', [
+                        _buildColorPickerField(
+                          label: 'Cor do traço',
+                          selected: _commonStrokeColor(),
+                          onSelected: (color) {
+                            if (color == null) return;
+                            _setStrokeColor(color);
+                          },
+                        ),
+                        if (_selectionSupportsFillEditing()) ...[
+                          const SizedBox(height: 12),
+                          _buildColorPickerField(
+                            label: 'Preenchimento',
+                            selected: _commonFillColor(),
+                            allowNone: true,
+                            onSelected: (color) => _setFillColor(color),
+                          ),
+                        ],
+                      ]),
+                    ],
+                    if (_selected.length == 1 &&
+                        _shapes[_selected.first].asset == 'generated:grid') ...[
+                      const Divider(height: 24),
+                      _buildPropertySection('Grade', [
+                        _buildGridPropertyField(
+                          label: 'Linhas',
+                          value: _resolvedGridRows(_shapes[_selected.first]),
+                          onDecrease: () =>
+                              _adjustGridDivision(isRows: true, delta: -1),
+                          onIncrease: () =>
+                              _adjustGridDivision(isRows: true, delta: 1),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildGridPropertyField(
+                          label: 'Colunas',
+                          value: _resolvedGridCols(_shapes[_selected.first]),
+                          onDecrease: () =>
+                              _adjustGridDivision(isRows: false, delta: -1),
+                          onIncrease: () =>
+                              _adjustGridDivision(isRows: false, delta: 1),
+                        ),
+                      ]),
+                    ],
                     // Propriedades específicas de texto
                     if (_selected.length == 1 &&
                         _shapes[_selected.first].asset == 'generated:text') ...[
@@ -2851,6 +3444,70 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCanvasDimensionField({
+    required String label,
+    required TextEditingController controller,
+    required VoidCallback onIncrease,
+    required VoidCallback onDecrease,
+    required VoidCallback onCommit,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTheme.typography.title.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            _dimensionStepButton(icon: Icons.remove, onPressed: onDecrease),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  suffixText: 'px',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onSubmitted: (_) => onCommit(),
+                onEditingComplete: onCommit,
+                onTapOutside: (_) => onCommit(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _dimensionStepButton(icon: Icons.add, onPressed: onIncrease),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _dimensionStepButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          shape: const CircleBorder(),
+        ),
+        child: Icon(icon, size: 18),
+      ),
     );
   }
 
@@ -2895,6 +3552,163 @@ class _HomeScreenState extends State<HomeScreen> {
           onChanged(parsed);
         }
       },
+    );
+  }
+
+  Widget _buildGridPropertyField({
+    required String label,
+    required int value,
+    required VoidCallback onDecrease,
+    required VoidCallback onIncrease,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTheme.typography.title.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              _smallRoundButton(icon: Icons.remove, onTap: onDecrease),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$value divisões',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _smallRoundButton(icon: Icons.add, onTap: onIncrease),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _selectionSupportsStrokeEditing() {
+    return _selected.any(
+      (index) => _shapeSupportsStrokeColor(_shapes[index].asset),
+    );
+  }
+
+  bool _selectionSupportsFillEditing() {
+    return _selected.any(
+      (index) => _shapeSupportsFillColor(_shapes[index].asset),
+    );
+  }
+
+  Color? _commonStrokeColor() {
+    Color? reference;
+    var initialized = false;
+    for (final index in _selected) {
+      final shape = _shapes[index];
+      if (!_shapeSupportsStrokeColor(shape.asset)) continue;
+      final current = _resolvedStrokeColor(shape);
+      if (!initialized) {
+        reference = current;
+        initialized = true;
+      } else if (reference!.value != current.value) {
+        return null;
+      }
+    }
+    return initialized ? reference : null;
+  }
+
+  Color? _commonFillColor() {
+    Color? reference;
+    var initialized = false;
+    for (final index in _selected) {
+      final shape = _shapes[index];
+      if (!_shapeSupportsFillColor(shape.asset)) continue;
+      final current = shape.fillColor;
+      if (!initialized) {
+        reference = current;
+        initialized = true;
+      } else {
+        final matches =
+            (reference == null && current == null) ||
+            (reference != null &&
+                current != null &&
+                reference.value == current.value);
+        if (!matches) return null;
+      }
+    }
+    return initialized ? reference : null;
+  }
+
+  void _setStrokeColor(Color color) {
+    setState(() {
+      _updateSelectedShapes((shape) {
+        if (_shapeSupportsStrokeColor(shape.asset)) {
+          shape.strokeColor = color;
+        }
+      });
+    });
+  }
+
+  void _setFillColor(Color? color) {
+    setState(() {
+      _updateSelectedShapes((shape) {
+        if (_shapeSupportsFillColor(shape.asset)) {
+          shape.fillColor = color;
+        }
+      });
+    });
+  }
+
+  Widget _buildColorPickerField({
+    required String label,
+    required Color? selected,
+    required ValueChanged<Color?> onSelected,
+    bool allowNone = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTheme.typography.title.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            if (allowNone)
+              _ColorChip(
+                color: Colors.transparent,
+                isNone: true,
+                selected: selected == null,
+                onTap: () => onSelected(null),
+              ),
+            for (final color in _shapeColorPalette)
+              _ColorChip(
+                color: color,
+                selected: selected != null && selected.value == color.value,
+                onTap: () => onSelected(color),
+              ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -3014,15 +3828,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     // Background branco (opcional); manter transparente por padrão
     for (final s in _shapes.where((s) => s.visible)) {
-      final cx = (s.position.dx - contentRect.left) + s.size / 2;
-      final cy = (s.position.dy - contentRect.top) + s.size / 2;
+      final cx = (s.position.dx - contentRect.left) + s.width / 2;
+      final cy = (s.position.dy - contentRect.top) + s.height / 2;
       final deg = s.rotation * 180 / math.pi;
       final b64 = base64ByAsset[s.asset]!;
       buffer.writeln('<g transform="rotate($deg $cx $cy)">');
       final adjX = s.position.dx - contentRect.left;
       final adjY = s.position.dy - contentRect.top;
       buffer.writeln(
-        '<image href="data:image/png;base64,$b64" x="$adjX" y="$adjY" width="${s.size}" height="${s.size}" />',
+        '<image href="data:image/png;base64,$b64" x="$adjX" y="$adjY" width="${s.width}" height="${s.height}" />',
       );
       buffer.writeln('</g>');
     }
@@ -3106,6 +3920,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ) ??
         false;
     if (!confirm) return;
+    _latestHistorySnapshot = null;
     // Mostra overlay primeiro (setState) e depois realiza captura assíncrona
     if (mounted) {
       setState(() {
@@ -3123,6 +3938,22 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
     if (_lastPreviewBytes == null) return;
+    try {
+      await _autoSaveCurrentSessionToHistory();
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Falha ao salvar histórico automaticamente: $error\n$stackTrace',
+      );
+      if (mounted) {
+        showAppNotification(
+          context,
+          message:
+              'Não consegui salvar no histórico agora, mas sua prévia foi gerada.',
+          type: AppNotificationType.warning,
+        );
+      }
+    }
+    if (!mounted) return;
     _showSavePreviewPanel();
   }
 
@@ -3265,9 +4096,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       Row(
                         children: [
                           OutlinedButton.icon(
-                            onPressed: _saveToCollection,
+                            onPressed: _saveSessionToCollection,
                             icon: const Icon(Icons.bookmark_border, size: 18),
-                            label: const Text('Salvar'),
+                            label: const Text('Coleção'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.pinkAccent,
                               side: const BorderSide(color: Colors.pinkAccent),
@@ -3305,37 +4136,101 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _saveToCollection() async {
-    // Serializa composição simples (JSON) em SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList('collection') ?? <String>[];
-    final composition = {
-      'createdAt': DateTime.now().toIso8601String(),
-      'pan': {'x': _pan.dx, 'y': _pan.dy},
-      'zoom': _zoom,
-      'shapes': [
-        for (final s in _shapes)
-          {
-            'asset': s.asset,
-            'x': s.position.dx,
-            'y': s.position.dy,
-            'size': s.size,
-            'rotation': s.rotation,
-            'locked': s.locked,
-            'visible': s.visible,
-            'groupId': s.groupId,
-            if (s.textContent != null) 'text': s.textContent,
-            if (s.fontSize != null) 'fontSize': s.fontSize,
-          },
-      ],
-    };
-    list.add(jsonEncode(composition));
-    await prefs.setStringList('collection', list);
-    if (context.mounted) {
-      ScaffoldMessenger.of(
+  Future<void> _saveSessionToCollection() async {
+    if (_lastPreviewBytes == null) {
+      if (!mounted) return;
+      showAppNotification(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Salvo na coleção')));
+        message: 'Gere uma pré-visualização antes de salvar.',
+        type: AppNotificationType.warning,
+      );
+      return;
     }
+
+    final now = DateTime.now();
+    final defaultTitle = _buildDefaultSessionTitle(now);
+
+    final meta = await showSnapshotMetadataSheet(
+      context,
+      initialTitle: defaultTitle,
+      helperText: 'Esse nome aparece no histórico e na coleção.',
+      titleLabel: 'Detalhes da sessão',
+      actionLabel: 'Salvar',
+    );
+
+    if (meta == null || !mounted) return;
+    final trimmedTitle = meta.title.trim();
+    final resolvedTitle = trimmedTitle.isEmpty ? defaultTitle : trimmedTitle;
+    final trimmedNotes = meta.notes?.trim();
+    final resolvedNotes = trimmedNotes?.isEmpty == true ? null : trimmedNotes;
+
+    final historyProvider = context.read<HistoryProvider>();
+    CanvasSnapshot? baseSnapshot = _latestHistorySnapshot;
+    final snapshotAlreadyInHistory = baseSnapshot != null;
+    if (!snapshotAlreadyInHistory) {
+      baseSnapshot = _composeSnapshot(
+        id: now.microsecondsSinceEpoch.toString(),
+        createdAt: now,
+        title: resolvedTitle,
+        notes: resolvedNotes,
+      );
+      await historyProvider.add(baseSnapshot);
+      if (!mounted) return;
+    }
+
+    final updatedSnapshot = baseSnapshot.copyWith(
+      title: resolvedTitle,
+      notes: resolvedNotes,
+    );
+    _latestHistorySnapshot = updatedSnapshot;
+
+    if (snapshotAlreadyInHistory) {
+      await historyProvider.updateMetadata(
+        updatedSnapshot.id,
+        title: resolvedTitle,
+        notes: resolvedNotes,
+      );
+    }
+
+    if (!mounted) return;
+
+    final collectionProvider = context.read<CollectionProvider>();
+    await collectionProvider.initialize();
+    if (!mounted) return;
+
+    final selection = await showCollectionPickerSheet(
+      context,
+      collections: collectionProvider.collections,
+    );
+
+    String message = 'Sessão salva no histórico.';
+
+    if (selection != null && mounted) {
+      var targetCollectionId = selection.collectionId;
+      if (selection.pendingName != null) {
+        final created = await collectionProvider.createCollection(
+          selection.pendingName!,
+        );
+        targetCollectionId = created.id;
+      }
+
+      if (targetCollectionId != null && mounted) {
+        await collectionProvider.addSession(
+          targetCollectionId,
+          updatedSnapshot,
+        );
+        final targetName =
+            collectionProvider.getById(targetCollectionId)?.name ?? 'Coleção';
+        message = 'Sessão salva no histórico e adicionada em "$targetName".';
+      }
+    }
+
+    if (!mounted) return;
+    showAppNotification(
+      context,
+      message: message,
+      type: AppNotificationType.success,
+    );
   }
 
   void _viewFullscreenPreview() {
@@ -3353,6 +4248,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Image.memory(_lastPreviewBytes!, fit: BoxFit.contain),
               ),
             ),
+
             Positioned(
               right: 8,
               top: 8,
@@ -3364,6 +4260,215 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  String _buildDefaultSessionTitle(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return 'Sessão $day/$month $hour:$minute';
+  }
+
+  CanvasSnapshot _composeSnapshot({
+    required String id,
+    required DateTime createdAt,
+    String? title,
+    String? notes,
+  }) {
+    final trimmedTitle = title?.trim();
+    final trimmedNotes = notes?.trim();
+    return CanvasSnapshot(
+      id: id,
+      createdAt: createdAt,
+      title: trimmedTitle?.isEmpty == true ? null : trimmedTitle,
+      notes: trimmedNotes?.isEmpty == true ? null : trimmedNotes,
+      stateJson: jsonEncode(_buildSnapshotPayload()),
+      previewBase64: base64Encode(_lastPreviewBytes!),
+    );
+  }
+
+  Future<void> _autoSaveCurrentSessionToHistory() async {
+    if (!mounted || _lastPreviewBytes == null) return;
+    final now = DateTime.now();
+    final snapshot = _composeSnapshot(
+      id: now.microsecondsSinceEpoch.toString(),
+      createdAt: now,
+      title: _buildDefaultSessionTitle(now),
+    );
+    final historyProvider = context.read<HistoryProvider>();
+    await historyProvider.add(snapshot);
+    _latestHistorySnapshot = snapshot;
+    if (!mounted) return;
+    showAppNotification(
+      context,
+      message: 'Sessão salva no histórico.',
+      type: AppNotificationType.success,
+    );
+  }
+
+  Map<String, dynamic> _buildSnapshotPayload() {
+    return {
+      'createdAt': DateTime.now().toIso8601String(),
+      'pan': {'x': _pan.dx, 'y': _pan.dy},
+      'zoom': _zoom,
+      'canvas': {'width': _canvasWidth, 'height': _canvasHeight},
+      'canvasWidth': _canvasWidth,
+      'canvasHeight': _canvasHeight,
+      'shapes': [
+        for (final shape in _shapes)
+          {
+            'asset': shape.asset,
+            'x': shape.position.dx,
+            'y': shape.position.dy,
+            'width': shape.width,
+            'height': shape.height,
+            'rotation': shape.rotation,
+            'locked': shape.locked,
+            'visible': shape.visible,
+            'groupId': shape.groupId,
+            if (shape.textContent != null) 'text': shape.textContent,
+            if (shape.fontSize != null) 'fontSize': shape.fontSize,
+            if (shape.customName != null) 'customName': shape.customName,
+            if (_encodeColor(shape.strokeColor) != null)
+              'strokeColor': _encodeColor(shape.strokeColor),
+            if (_encodeColor(shape.fillColor) != null)
+              'fillColor': _encodeColor(shape.fillColor),
+            if (shape.gridRows != null) 'gridRows': shape.gridRows,
+            if (shape.gridCols != null) 'gridCols': shape.gridCols,
+            if (shape.gridCellSize != null) 'gridCellSize': shape.gridCellSize,
+            if (shape.brushPoints != null)
+              'brushPoints': [
+                for (final point in shape.brushPoints!)
+                  {'x': point.dx, 'y': point.dy},
+              ],
+            if (shape.brushStrokeWidth != null)
+              'brushStrokeWidth': shape.brushStrokeWidth,
+            if (_encodeColor(shape.brushColor) != null)
+              'brushColor': _encodeColor(shape.brushColor),
+            if (shape.brushBoundsWidth != null)
+              'brushBoundsWidth': shape.brushBoundsWidth,
+            if (shape.brushBoundsHeight != null)
+              'brushBoundsHeight': shape.brushBoundsHeight,
+            if (shape.brushInset != null)
+              'brushInset': {
+                'x': shape.brushInset!.dx,
+                'y': shape.brushInset!.dy,
+              },
+            if (shape.embeddedImageBytes != null)
+              'imageBytes': base64Encode(shape.embeddedImageBytes!),
+          },
+      ],
+    };
+  }
+
+  void _restoreFromSnapshot(CanvasSnapshot snapshot) {
+    try {
+      final data = jsonDecode(snapshot.stateJson) as Map<String, dynamic>;
+      final shapesData = (data['shapes'] as List<dynamic>? ?? <dynamic>[]).map((
+        raw,
+      ) {
+        return _shapeFromMap(raw as Map<String, dynamic>);
+      }).toList();
+      final canvasData = data['canvas'] as Map<String, dynamic>?;
+      final restoredWidth =
+          (canvasData?['width'] as num?)?.toDouble() ??
+          (data['canvasWidth'] as num?)?.toDouble();
+      final restoredHeight =
+          (canvasData?['height'] as num?)?.toDouble() ??
+          (data['canvasHeight'] as num?)?.toDouble();
+
+      setState(() {
+        if (restoredWidth != null) {
+          _canvasWidth = restoredWidth;
+        }
+        if (restoredHeight != null) {
+          _canvasHeight = restoredHeight;
+        }
+        _pan = _offsetFromMap(data['pan'] as Map<String, dynamic>?);
+        _zoom = (data['zoom'] as num?)?.toDouble() ?? 1.0;
+        _shapes
+          ..clear()
+          ..addAll(shapesData);
+        _selected.clear();
+        _selectedShapeIndex = -1;
+        _clampShapesToCanvas();
+        if (snapshot.previewBytes != null) {
+          _lastPreviewBytes = snapshot.previewBytes;
+        }
+      });
+
+      _syncCanvasControllers();
+
+      if (!mounted) return;
+      showAppNotification(
+        context,
+        message: '"${snapshot.resolvedTitle}" carregado no canvas.',
+        type: AppNotificationType.success,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Erro ao restaurar composição: $error\n$stackTrace');
+    }
+  }
+
+  _PlacedShape _shapeFromMap(Map<String, dynamic> data) {
+    final asset = data['asset'] as String;
+    double? _toDouble(dynamic value) => (value as num?)?.toDouble();
+    List<Offset>? _decodeBrushPoints(List<dynamic>? raw) {
+      if (raw == null || raw.isEmpty) return null;
+      final points = <Offset>[];
+      for (final entry in raw) {
+        if (entry is Map<String, dynamic>) {
+          final dx = _toDouble(entry['x']);
+          final dy = _toDouble(entry['y']);
+          if (dx != null && dy != null) {
+            points.add(Offset(dx, dy));
+          }
+        }
+      }
+      return points.isEmpty ? null : points;
+    }
+
+    return _PlacedShape(
+      asset: asset,
+      position: Offset(_toDouble(data['x']) ?? 0, _toDouble(data['y']) ?? 0),
+      width: _toDouble(data['width']) ?? _toDouble(data['size']) ?? _shapeSize,
+      height:
+          _toDouble(data['height']) ?? _toDouble(data['size']) ?? _shapeSize,
+      rotation: (data['rotation'] as num?)?.toDouble(),
+      locked: data['locked'] as bool? ?? false,
+      visible: data['visible'] as bool? ?? true,
+      groupId: data['groupId'] as String?,
+      textContent: data['text'] as String?,
+      fontSize: (data['fontSize'] as num?)?.toDouble(),
+      customName: data['customName'] as String?,
+      strokeColor: _decodeColor(data['strokeColor']),
+      fillColor: _decodeColor(data['fillColor']),
+      gridRows:
+          (data['gridRows'] as num?)?.toInt() ??
+          (asset == 'generated:grid' ? _defaultGridRows : null),
+      gridCols:
+          (data['gridCols'] as num?)?.toInt() ??
+          (asset == 'generated:grid' ? _defaultGridCols : null),
+      gridCellSize: _toDouble(data['gridCellSize']),
+      brushPoints: _decodeBrushPoints(data['brushPoints'] as List<dynamic>?),
+      brushStrokeWidth: _toDouble(data['brushStrokeWidth']),
+      brushColor: _decodeColor(data['brushColor']),
+      brushBoundsWidth: _toDouble(data['brushBoundsWidth']),
+      brushBoundsHeight: _toDouble(data['brushBoundsHeight']),
+      brushInset: _offsetFromMap(data['brushInset'] as Map<String, dynamic>?),
+      embeddedImageBytes: data['imageBytes'] is String
+          ? Uint8List.fromList(base64Decode(data['imageBytes'] as String))
+          : null,
+    );
+  }
+
+  Offset _offsetFromMap(Map<String, dynamic>? data) {
+    if (data == null) return Offset.zero;
+    return Offset(
+      (data['x'] as num?)?.toDouble() ?? 0,
+      (data['y'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -3625,8 +4730,10 @@ class _HomeScreenState extends State<HomeScreen> {
       textDirection: TextDirection.ltr,
       maxLines: 10,
     )..layout();
-    final needed = math.max(tp.width, tp.height) + 12;
-    s.size = needed.clamp(24.0, 640.0);
+    final neededWidth = (tp.width + 12).clamp(24.0, 640.0);
+    final neededHeight = (tp.height + 12).clamp(24.0, 640.0);
+    s.width = neededWidth;
+    s.height = neededHeight;
   }
 
   String _displayNameForShape(_PlacedShape s) {
@@ -3650,6 +4757,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return 'Círculo';
       case 'triangle':
         return 'Triângulo';
+      case 'grid':
+        return 'Grade';
       case 'line_solid':
         return 'Linha';
       case 'line_dashed':
@@ -3759,11 +4868,25 @@ class _MarqueePainter extends CustomPainter {
 // ================= Painters para shapes gerados =================
 
 class _RectPainter extends CustomPainter {
+  const _RectPainter({required this.strokeColor, this.fillColor});
+
+  final Color strokeColor;
+  final Color? fillColor;
+
   @override
   void paint(Canvas canvas, Size size) {
     final r = Rect.fromLTWH(0, 0, size.width, size.height);
+    if (fillColor != null) {
+      final fillPaint = Paint()
+        ..color = fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(r, const Radius.circular(6)),
+        fillPaint,
+      );
+    }
     final paint = Paint()
-      ..color = Colors.black
+      ..color = strokeColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawRRect(
@@ -3773,24 +4896,84 @@ class _RectPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RectPainter oldDelegate) =>
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.fillColor != fillColor;
 }
 
-class _CirclePainter extends CustomPainter {
+class _GridShapePainter extends CustomPainter {
+  const _GridShapePainter({
+    required this.rows,
+    required this.cols,
+    required this.strokeColor,
+  });
+
+  final int rows;
+  final int cols;
+  final Color strokeColor;
+
+  int get _safeRows => math.max(1, rows);
+  int get _safeCols => math.max(1, cols);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawCircle(size.center(Offset.zero), size.shortestSide / 2, paint);
+      ..color = strokeColor
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    for (int c = 0; c <= _safeCols; c++) {
+      final x = size.width * (c / _safeCols);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (int r = 0; r <= _safeRows; r++) {
+      final y = size.height * (r / _safeRows);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _GridShapePainter oldDelegate) =>
+      oldDelegate.rows != rows ||
+      oldDelegate.cols != cols ||
+      oldDelegate.strokeColor != strokeColor;
+}
+
+class _CirclePainter extends CustomPainter {
+  const _CirclePainter({required this.strokeColor, this.fillColor});
+
+  final Color strokeColor;
+  final Color? fillColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    if (fillColor != null) {
+      final fill = Paint()
+        ..color = fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(center, radius, fill);
+    }
+    final paint = Paint()
+      ..color = strokeColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawCircle(center, radius, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CirclePainter oldDelegate) =>
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.fillColor != fillColor;
 }
 
 class _TrianglePainter extends CustomPainter {
+  const _TrianglePainter({required this.strokeColor, this.fillColor});
+
+  final Color strokeColor;
+  final Color? fillColor;
+
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path()
@@ -3798,24 +4981,33 @@ class _TrianglePainter extends CustomPainter {
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
+    if (fillColor != null) {
+      final fill = Paint()
+        ..color = fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(path, fill);
+    }
     final paint = Paint()
-      ..color = Colors.black
+      ..color = strokeColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _TrianglePainter oldDelegate) =>
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.fillColor != fillColor;
 }
 
 class _LinePainter extends CustomPainter {
   final bool dashed;
-  _LinePainter({required this.dashed});
+  final Color color;
+  _LinePainter({required this.dashed, required this.color});
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black87
+      ..color = color
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
     if (!dashed) {
@@ -3839,22 +5031,35 @@ class _LinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LinePainter oldDelegate) =>
-      oldDelegate.dashed != dashed;
+      oldDelegate.dashed != dashed || oldDelegate.color != color;
 }
 
 class _BlockPainter extends CustomPainter {
+  const _BlockPainter({required this.strokeColor, this.fillColor});
+
+  final Color strokeColor;
+  final Color? fillColor;
+
   @override
   void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(1, 1, size.width - 2, size.height - 2);
+    if (fillColor != null) {
+      final fill = Paint()
+        ..color = fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawRect(rect, fill);
+    }
     final paint = Paint()
-      ..color = Colors.black
+      ..color = strokeColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    final r = Rect.fromLTWH(1, 1, size.width - 2, size.height - 2);
-    canvas.drawRect(r, paint);
+    canvas.drawRect(rect, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _BlockPainter oldDelegate) =>
+      oldDelegate.strokeColor != strokeColor ||
+      oldDelegate.fillColor != fillColor;
 }
 
 class _InclinedPlanePainter extends CustomPainter {
@@ -3915,10 +5120,14 @@ class _SpringPainter extends CustomPainter {
 }
 
 class _ForceVectorPainter extends CustomPainter {
+  const _ForceVectorPainter({required this.color});
+
+  final Color color;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black
+      ..color = color
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -3942,7 +5151,8 @@ class _ForceVectorPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _ForceVectorPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _ResistorPainter extends CustomPainter {
@@ -4730,4 +5940,58 @@ class _BenzenePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ColorChip extends StatelessWidget {
+  const _ColorChip({
+    required this.color,
+    required this.onTap,
+    required this.selected,
+    this.isNone = false,
+  });
+
+  final Color color;
+  final VoidCallback onTap;
+  final bool selected;
+  final bool isNone;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected
+        ? AppTheme.colors.primary
+        : Colors.grey.shade400;
+    final backgroundColor = isNone ? Colors.transparent : color;
+    final needsOutline = !isNone && color.computeLuminance() > 0.75;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: backgroundColor,
+          border: Border.all(color: borderColor, width: selected ? 2 : 1),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: borderColor.withOpacity(0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+        foregroundDecoration: needsOutline
+            ? BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade200),
+              )
+            : null,
+        child: isNone
+            ? Icon(Icons.block, size: 16, color: Colors.grey.shade600)
+            : null,
+      ),
+    );
+  }
 }

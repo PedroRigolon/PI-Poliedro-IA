@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../widgets/app_notification.dart';
 import '../providers/auth_provider.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 
@@ -207,8 +208,10 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+          showAppNotification(
+            context,
+            message: e.toString(),
+            type: AppNotificationType.danger,
           );
         }
       }

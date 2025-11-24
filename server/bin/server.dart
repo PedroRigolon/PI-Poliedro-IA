@@ -51,5 +51,7 @@ void main() async {
   print('   POST /api/auth/register');
   print('   POST /api/auth/login');
   print('   POST /api/auth/logout');
+  print('   POST /api/auth/change-password');
+  print('   DELETE /api/auth/account');
   print('   GET  /health');
 }

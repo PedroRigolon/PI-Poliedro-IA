@@ -21,11 +21,8 @@ class AuthService {
         final token = data['token'] as String;
         final userType = data['user']['type'] as String;
 
-        // Salva token localmente
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('auth_token', token);
-        await prefs.setString('user_email', email);
-        await prefs.setString('user_type', userType);
+        await _persistSession(prefs, token: token, email: email, userType: userType);
 
         return UserModel(
           email: email,
@@ -58,11 +55,8 @@ class AuthService {
         final token = data['token'] as String;
         final userType = data['user']['type'] as String;
 
-        // Salva token localmente
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('auth_token', token);
-        await prefs.setString('user_email', email);
-        await prefs.setString('user_type', userType);
+        await _persistSession(prefs, token: token, email: email, userType: userType);
 
         return UserModel(
           email: email,
@@ -94,14 +88,50 @@ class AuthService {
         );
       }
 
-      // Limpa dados locais
-      await prefs.remove('auth_token');
-      await prefs.remove('user_email');
-      await prefs.remove('user_type');
+      await _clearSession(prefs);
     } catch (e) {
-      // Mesmo com erro, limpa dados locais
       final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
+      await _clearSession(prefs);
+    }
+  }
+
+  Future<void> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
+    try {
+      final headers = await _buildAuthHeaders();
+      await _dio.post(
+        '$baseUrl/change-password',
+        data: {
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        },
+        options: Options(headers: headers),
+      );
+    } on DioException catch (e) {
+      final error = e.response?.data['error'] ?? 'Erro ao alterar senha';
+      throw Exception(error);
+    }
+  }
+
+  Future<void> deleteAccount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    if (token == null) {
+      throw Exception('Sessão expirada. Faça login novamente.');
+    }
+
+    try {
+      await _dio.delete(
+        '$baseUrl/account',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    } on DioException catch (e) {
+      final error = e.response?.data['error'] ?? 'Erro ao excluir conta';
+      throw Exception(error);
+    } finally {
+      await _clearSession(prefs);
     }
   }
 
@@ -131,5 +161,31 @@ class AuthService {
       default:
         return UserType.student;
     }
+  }
+
+  Future<void> _persistSession(
+    SharedPreferences prefs, {
+    required String token,
+    required String email,
+    required String userType,
+  }) async {
+    await prefs.setString('auth_token', token);
+    await prefs.setString('user_email', email);
+    await prefs.setString('user_type', userType);
+  }
+
+  Future<void> _clearSession(SharedPreferences prefs) async {
+    await prefs.remove('auth_token');
+    await prefs.remove('user_email');
+    await prefs.remove('user_type');
+  }
+
+  Future<Map<String, String>> _buildAuthHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    if (token == null) {
+      throw Exception('Sessão expirada. Faça login novamente.');
+    }
+    return {'Authorization': 'Bearer $token'};
   }
 }
