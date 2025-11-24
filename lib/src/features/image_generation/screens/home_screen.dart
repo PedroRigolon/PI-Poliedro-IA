@@ -13,6 +13,7 @@ import 'package:image/image.dart' as img;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_navbar.dart';
@@ -102,9 +103,9 @@ class _PlacedShape {
     this.brushBoundsHeight,
     this.brushInset,
     this.embeddedImageBytes,
-  })  : width = width ?? _defaultShapeExtent,
-        height = height ?? _defaultShapeExtent,
-        rotation = rotation ?? 0;
+  }) : width = width ?? _defaultShapeExtent,
+       height = height ?? _defaultShapeExtent,
+       rotation = rotation ?? 0;
 
   _PlacedShape copyWith({
     String? asset,
@@ -206,17 +207,21 @@ const List<Color> _shapeColorPalette = [
   Color(0xFF94A3B8),
 ];
 
-const String _envOpenAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
-const String _defaultOpenAiApiKey =
-  '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';
+const String _buildTimeOpenAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
 const String _openAiImagesEndpoint =
-  'https://api.openai.com/v1/images/generations';
+    'https://api.openai.com/v1/images/generations';
 const String _openAiModel = 'dall-e-3';
 
-String get _resolvedOpenAiApiKey =>
-  _envOpenAiApiKey.isNotEmpty ? _envOpenAiApiKey : _defaultOpenAiApiKey;
+String get _resolvedOpenAiApiKey {
+  final runtimeKey = dotenv.env['OPENAI_API_KEY']?.trim() ?? '';
+  if (runtimeKey.isNotEmpty) return runtimeKey;
+  final buildTimeKey = _buildTimeOpenAiApiKey.trim();
+  if (buildTimeKey.isNotEmpty) return buildTimeKey;
+  return '';
+}
 
-bool _shapeSupportsStrokeColor(String asset) => _strokeColorShapes.contains(asset);
+bool _shapeSupportsStrokeColor(String asset) =>
+    _strokeColorShapes.contains(asset);
 
 bool _shapeSupportsFillColor(String asset) => _fillColorShapes.contains(asset);
 
@@ -267,11 +272,10 @@ Color? _decodeColor(dynamic value) {
   }
   return null;
 }
-int _resolvedGridRows(_PlacedShape shape) =>
-    shape.gridRows ?? _defaultGridRows;
 
-int _resolvedGridCols(_PlacedShape shape) =>
-    shape.gridCols ?? _defaultGridCols;
+int _resolvedGridRows(_PlacedShape shape) => shape.gridRows ?? _defaultGridRows;
+
+int _resolvedGridCols(_PlacedShape shape) => shape.gridCols ?? _defaultGridCols;
 
 class _DeleteShapeIntent extends Intent {
   const _DeleteShapeIntent();
@@ -379,8 +383,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isChatGenerating = false;
 
   void _toggleMateria(String materia) => setState(
-        () => _materiaExpanded[materia] = !(_materiaExpanded[materia] ?? true),
-      );
+    () => _materiaExpanded[materia] = !(_materiaExpanded[materia] ?? true),
+  );
 
   void _toggleSub(String sub) =>
       setState(() => _subExpanded[sub] = !(_subExpanded[sub] ?? true));
@@ -388,10 +392,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _canvasWidthController =
-        TextEditingController(text: _canvasWidth.round().toString());
-    _canvasHeightController =
-        TextEditingController(text: _canvasHeight.round().toString());
+    _canvasWidthController = TextEditingController(
+      text: _canvasWidth.round().toString(),
+    );
+    _canvasHeightController = TextEditingController(
+      text: _canvasHeight.round().toString(),
+    );
   }
 
   @override
@@ -444,14 +450,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _resetCanvasSize() {
-    _applyCanvasSize(
-      width: _defaultCanvasWidth,
-      height: _defaultCanvasHeight,
-    );
+    _applyCanvasSize(width: _defaultCanvasWidth, height: _defaultCanvasHeight);
   }
 
   void _syncCanvasControllers() {
-    _setControllerValue(_canvasWidthController, _canvasWidth.round().toString());
+    _setControllerValue(
+      _canvasWidthController,
+      _canvasWidth.round().toString(),
+    );
     _setControllerValue(
       _canvasHeightController,
       _canvasHeight.round().toString(),
@@ -467,7 +473,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _commitCanvasDimensionInput({required bool isWidth}) {
-    final controller = isWidth ? _canvasWidthController : _canvasHeightController;
+    final controller = isWidth
+        ? _canvasWidthController
+        : _canvasHeightController;
     final rawValue = controller.text.trim();
     if (rawValue.isEmpty) {
       _syncCanvasControllers();
@@ -478,8 +486,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _syncCanvasControllers();
       return;
     }
-    final clamped =
-        parsed.clamp(_minCanvasDimension, _maxCanvasDimension).toDouble();
+    final clamped = parsed
+        .clamp(_minCanvasDimension, _maxCanvasDimension)
+        .toDouble();
     _applyCanvasSize(
       width: isWidth ? clamped : null,
       height: isWidth ? null : clamped,
@@ -806,7 +815,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                   onPointerDown: (event) {
                                     // Botão do meio do mouse para pan estilo Figma
-                                    if (event.kind == ui.PointerDeviceKind.mouse &&
+                                    if (event.kind ==
+                                            ui.PointerDeviceKind.mouse &&
                                         (event.buttons & 0x04) != 0) {
                                       setState(() {
                                         _isMiddlePanning = true;
@@ -817,7 +827,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                   onPointerMove: (event) {
                                     if (_isMiddlePanning &&
-                                        event.kind == ui.PointerDeviceKind.mouse) {
+                                        event.kind ==
+                                            ui.PointerDeviceKind.mouse) {
                                       final last = _lastMiddlePanLocal;
                                       if (last != null) {
                                         final delta =
@@ -832,7 +843,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                   onPointerUp: (event) {
                                     if (_isMiddlePanning &&
-                                        event.kind == ui.PointerDeviceKind.mouse) {
+                                        event.kind ==
+                                            ui.PointerDeviceKind.mouse) {
                                       setState(() {
                                         _isMiddlePanning = false;
                                         _lastMiddlePanLocal = null;
@@ -931,7 +943,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   children: [
                                                     Positioned.fill(
                                                       child: Container(
-                                                        color: _exportingTransparent
+                                                        color:
+                                                            _exportingTransparent
                                                             ? Colors.transparent
                                                             : Colors.white,
                                                         child: CustomPaint(
@@ -1409,8 +1422,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _stepCanvasDimension(isWidth: true, delta: _canvasStep),
               onDecrease: () =>
                   _stepCanvasDimension(isWidth: true, delta: -_canvasStep),
-              onCommit: () =>
-                  _commitCanvasDimensionInput(isWidth: true),
+              onCommit: () => _commitCanvasDimensionInput(isWidth: true),
             ),
             const SizedBox(height: 12),
             _buildCanvasDimensionField(
@@ -1420,8 +1432,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _stepCanvasDimension(isWidth: false, delta: _canvasStep),
               onDecrease: () =>
                   _stepCanvasDimension(isWidth: false, delta: -_canvasStep),
-              onCommit: () =>
-                  _commitCanvasDimensionInput(isWidth: false),
+              onCommit: () => _commitCanvasDimensionInput(isWidth: false),
             ),
             const SizedBox(height: 12),
             Align(
@@ -1827,10 +1838,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final resolvedStroke = strokeColor ?? _defaultStrokeColor(key);
     switch (base) {
       case 'rect':
-        return _RectPainter(
-          strokeColor: resolvedStroke,
-          fillColor: fillColor,
-        );
+        return _RectPainter(strokeColor: resolvedStroke, fillColor: fillColor);
       case 'circle':
         return _CirclePainter(
           strokeColor: resolvedStroke,
@@ -1846,10 +1854,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'line_dashed':
         return _LinePainter(dashed: true, color: resolvedStroke);
       case 'block':
-        return _BlockPainter(
-          strokeColor: resolvedStroke,
-          fillColor: fillColor,
-        );
+        return _BlockPainter(strokeColor: resolvedStroke, fillColor: fillColor);
       case 'grid':
         final rows = shape != null
             ? _resolvedGridRows(shape)
@@ -1925,10 +1930,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'benzene':
         return _BenzenePainter();
       default:
-        return _RectPainter(
-          strokeColor: resolvedStroke,
-          fillColor: fillColor,
-        );
+        return _RectPainter(strokeColor: resolvedStroke, fillColor: fillColor);
     }
   }
 
@@ -2034,7 +2036,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_selected.length != 1) return;
     final shape = _shapes[_selected.first];
     if (shape.asset != 'generated:grid') return;
-    final current = isRows ? _resolvedGridRows(shape) : _resolvedGridCols(shape);
+    final current = isRows
+        ? _resolvedGridRows(shape)
+        : _resolvedGridCols(shape);
     final next = (current + delta).clamp(_minGridDivisions, _maxGridDivisions);
     if (next == current) return;
     setState(() {
@@ -2406,7 +2410,9 @@ class _HomeScreenState extends State<HomeScreen> {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         detail = body['error']?['message'] as String?;
       } catch (_) {}
-      throw Exception(detail ?? 'Falha ${response.statusCode} ao gerar imagem.');
+      throw Exception(
+        detail ?? 'Falha ${response.statusCode} ao gerar imagem.',
+      );
     }
   }
 
@@ -2495,8 +2501,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ? AppTheme.colors.primary.withValues(alpha: 0.12)
         : Colors.grey[200]!;
     final textColor = isUser ? AppTheme.colors.primary : Colors.black87;
-    final alignment =
-        isUser ? Alignment.centerRight : Alignment.centerLeft;
+    final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
     final radius = BorderRadius.only(
       topLeft: const Radius.circular(14),
       topRight: const Radius.circular(14),
@@ -2511,11 +2516,7 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(color: color, borderRadius: radius),
         child: Text(
           message.text,
-          style: TextStyle(
-            color: textColor,
-            fontSize: 13,
-            height: 1.4,
-          ),
+          style: TextStyle(color: textColor, fontSize: 13, height: 1.4),
         ),
       ),
     );
@@ -2574,8 +2575,11 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.chat_bubble_outline,
-                  color: Colors.grey[700], size: 18),
+              Icon(
+                Icons.chat_bubble_outline,
+                color: Colors.grey[700],
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Chat rápido',
@@ -2597,8 +2601,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 : ListView(
                     reverse: true,
                     shrinkWrap: true,
-                    children: _chatMessages
-                        .reversed
+                    children: _chatMessages.reversed
                         .map(_buildChatBubble)
                         .toList(),
                   ),
@@ -2630,8 +2633,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: IconButton.styleFrom(
                   backgroundColor: AppTheme.colors.primary,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor:
-                      AppTheme.colors.primary.withValues(alpha: 0.3),
+                  disabledBackgroundColor: AppTheme.colors.primary.withValues(
+                    alpha: 0.3,
+                  ),
                   disabledForegroundColor: Colors.white70,
                 ),
                 icon: _isChatGenerating
@@ -2640,8 +2644,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Icon(Icons.send, size: 18),
@@ -2693,15 +2698,17 @@ class _HomeScreenState extends State<HomeScreen> {
       final cosA = math.cos(s.rotation);
       final sinA = math.sin(s.rotation);
       // 4 cantos relativos ao centro
-      final corners = <Offset>[
-        Offset(-halfW, -halfH),
-        Offset(halfW, -halfH),
-        Offset(halfW, halfH),
-        Offset(-halfW, halfH),
-      ].map(
-        (p) => Offset(cosA * p.dx - sinA * p.dy, sinA * p.dx + cosA * p.dy) +
-            center,
-      );
+      final corners =
+          <Offset>[
+            Offset(-halfW, -halfH),
+            Offset(halfW, -halfH),
+            Offset(halfW, halfH),
+            Offset(-halfW, halfH),
+          ].map(
+            (p) =>
+                Offset(cosA * p.dx - sinA * p.dy, sinA * p.dx + cosA * p.dy) +
+                center,
+          );
       for (final p in corners) {
         if (p.dx < minX) minX = p.dx;
         if (p.dy < minY) minY = p.dy;
@@ -2849,32 +2856,32 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               )
                             : s.asset.startsWith('generated:')
-                                ? (s.asset == 'generated:text'
-                                    ? CustomPaint(
-                                        painter: _TextShapePainter(
-                                          text: s.textContent ?? 'Texto',
-                                          fontSize: s.fontSize ?? 16,
-                                        ),
-                                        size: Size.infinite,
-                                      )
-                                    : CustomPaint(
-                                        painter: _shapePainterForKey(
-                                          s.asset,
-                                          shape: s,
-                                          strokeColor: _resolvedStrokeColor(s),
-                                          fillColor: _resolvedFillColor(s),
-                                        ),
-                                        size: Size.infinite,
-                                      ))
-                                : Image.asset(
-                                    s.asset,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stack) => Icon(
-                                      Icons.crop_square,
-                                      size: math.min(s.width, s.height) * 0.6,
-                                      color: Colors.grey[400],
-                                    ),
-                                  ),
+                            ? (s.asset == 'generated:text'
+                                  ? CustomPaint(
+                                      painter: _TextShapePainter(
+                                        text: s.textContent ?? 'Texto',
+                                        fontSize: s.fontSize ?? 16,
+                                      ),
+                                      size: Size.infinite,
+                                    )
+                                  : CustomPaint(
+                                      painter: _shapePainterForKey(
+                                        s.asset,
+                                        shape: s,
+                                        strokeColor: _resolvedStrokeColor(s),
+                                        fillColor: _resolvedFillColor(s),
+                                      ),
+                                      size: Size.infinite,
+                                    ))
+                            : Image.asset(
+                                s.asset,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stack) => Icon(
+                                  Icons.crop_square,
+                                  size: math.min(s.width, s.height) * 0.6,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
                       ),
                     ),
                   ),
@@ -2925,7 +2932,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _interactingWithHandle = true;
                           _rotatingShapeIndex = index;
                           _rotatingInitialRotation = s.rotation;
-                            final center = _shapeCenter(s);
+                          final center = _shapeCenter(s);
                           final box =
                               _canvasKey.currentContext?.findRenderObject()
                                   as RenderBox?;
@@ -3005,136 +3012,145 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPanCancel: () => _interactingWithHandle = false,
                           onPanEnd: (_) => _interactingWithHandle = false,
                           onPanUpdate: (details) {
-                          setState(() {
-                            final keys =
-                                HardwareKeyboard.instance.logicalKeysPressed;
-                            final keepProportion =
-                                keys.contains(LogicalKeyboardKey.shiftLeft) ||
-                                keys.contains(LogicalKeyboardKey.shiftRight);
-                            if (_selected.length <= 1) {
-                              if (s.asset == 'generated:text') {
-                                final dominantDelta = keepProportion
-                                    ? (details.delta.dx.abs() >=
-                                            details.delta.dy.abs()
-                                        ? details.delta.dx
-                                        : details.delta.dy)
-                                    : details.delta.dx;
-                                final currentFont = s.fontSize ?? 16;
-                                final nextFont =
-                                    (currentFont + dominantDelta / _zoom)
-                                        .clamp(8.0, 240.0);
-                                s.fontSize = nextFont;
-                                _autoResizeTextShape(s);
-                                final maxWidth =
-                                    _canvasWidth - s.position.dx;
-                                final maxHeight =
-                                    _canvasHeight - s.position.dy;
-                                if ((s.width > maxWidth ||
-                                        s.height > maxHeight) &&
-                                    maxWidth > 24 &&
-                                    maxHeight > 24) {
-                                  final factor = math.min(
-                                    maxWidth / s.width,
-                                    maxHeight / s.height,
-                                  );
-                                  s.fontSize =
-                                      ((s.fontSize ?? 16) * factor)
+                            setState(() {
+                              final keys =
+                                  HardwareKeyboard.instance.logicalKeysPressed;
+                              final keepProportion =
+                                  keys.contains(LogicalKeyboardKey.shiftLeft) ||
+                                  keys.contains(LogicalKeyboardKey.shiftRight);
+                              if (_selected.length <= 1) {
+                                if (s.asset == 'generated:text') {
+                                  final dominantDelta = keepProportion
+                                      ? (details.delta.dx.abs() >=
+                                                details.delta.dy.abs()
+                                            ? details.delta.dx
+                                            : details.delta.dy)
+                                      : details.delta.dx;
+                                  final currentFont = s.fontSize ?? 16;
+                                  final nextFont =
+                                      (currentFont + dominantDelta / _zoom)
                                           .clamp(8.0, 240.0);
+                                  s.fontSize = nextFont;
                                   _autoResizeTextShape(s);
-                                }
-                                return;
-                              }
-                              final delta = details.delta / _zoom;
-                              double targetWidth =
-                                  (s.width + delta.dx).clamp(16.0, 640.0);
-                              double targetHeight =
-                                  (s.height + delta.dy).clamp(16.0, 640.0);
-                              if (keepProportion) {
-                                final scale = math.min(
-                                  targetWidth / s.width,
-                                  targetHeight / s.height,
-                                );
-                                targetWidth =
-                                    (s.width * scale).clamp(16.0, 640.0);
-                                targetHeight =
-                                    (s.height * scale).clamp(16.0, 640.0);
-                              }
-                              final availableWidth = math.max(
-                                16.0,
-                                _canvasWidth - s.position.dx,
-                              );
-                              final availableHeight = math.max(
-                                16.0,
-                                _canvasHeight - s.position.dy,
-                              );
-                              targetWidth = math.min(
-                                targetWidth,
-                                availableWidth,
-                              );
-                              targetHeight = math.min(
-                                targetHeight,
-                                availableHeight,
-                              );
-                              s.width = targetWidth;
-                              s.height = targetHeight;
-                            } else {
-                              final bounds = _selectionBounds();
-                              if (bounds == null ||
-                                  bounds.width <= 0 ||
-                                  bounds.height <= 0) {
-                                return;
-                              }
-                              final anchor = bounds.topLeft;
-                              final cur = bounds.bottomRight;
-                              final newBR = cur + details.delta / _zoom;
-                              final newW = (newBR.dx - anchor.dx).clamp(
-                                24.0,
-                                double.infinity,
-                              );
-                              final newH = (newBR.dy - anchor.dy).clamp(
-                                24.0,
-                                double.infinity,
-                              );
-                              final scaleX = newW / bounds.width;
-                              final scaleY = newH / bounds.height;
-                              final uniformScale = keepProportion
-                                  ? math.min(scaleX, scaleY)
-                                  : null;
-                              final sx = keepProportion
-                                  ? uniformScale!
-                                  : scaleX;
-                              final sy = keepProportion
-                                  ? uniformScale!
-                                  : scaleY;
-                              final center = bounds.center;
-                              for (final idx in _selected) {
-                                final shp = _shapes[idx];
-                                if (shp.locked) continue;
-                                final rel = _shapeCenter(shp) - center;
-                                final relScaled =
-                                    Offset(rel.dx * sx, rel.dy * sy);
-                                if (shp.asset == 'generated:text') {
-                                  final updatedFont =
-                                      ((shp.fontSize ?? 16) * math.min(sx, sy))
-                                          .clamp(8.0, 240.0);
-                                  shp.fontSize = updatedFont;
-                                  _autoResizeTextShape(shp);
-                                } else {
-                                  shp.width =
-                                      (shp.width * sx).clamp(16.0, 640.0);
-                                  shp.height =
-                                      (shp.height * sy).clamp(16.0, 640.0);
-                                }
-                                shp.position = center +
-                                    relScaled -
-                                    Offset(
-                                      shp.width / 2,
-                                      shp.height / 2,
+                                  final maxWidth = _canvasWidth - s.position.dx;
+                                  final maxHeight =
+                                      _canvasHeight - s.position.dy;
+                                  if ((s.width > maxWidth ||
+                                          s.height > maxHeight) &&
+                                      maxWidth > 24 &&
+                                      maxHeight > 24) {
+                                    final factor = math.min(
+                                      maxWidth / s.width,
+                                      maxHeight / s.height,
                                     );
+                                    s.fontSize = ((s.fontSize ?? 16) * factor)
+                                        .clamp(8.0, 240.0);
+                                    _autoResizeTextShape(s);
+                                  }
+                                  return;
+                                }
+                                final delta = details.delta / _zoom;
+                                double targetWidth = (s.width + delta.dx).clamp(
+                                  16.0,
+                                  640.0,
+                                );
+                                double targetHeight = (s.height + delta.dy)
+                                    .clamp(16.0, 640.0);
+                                if (keepProportion) {
+                                  final scale = math.min(
+                                    targetWidth / s.width,
+                                    targetHeight / s.height,
+                                  );
+                                  targetWidth = (s.width * scale).clamp(
+                                    16.0,
+                                    640.0,
+                                  );
+                                  targetHeight = (s.height * scale).clamp(
+                                    16.0,
+                                    640.0,
+                                  );
+                                }
+                                final availableWidth = math.max(
+                                  16.0,
+                                  _canvasWidth - s.position.dx,
+                                );
+                                final availableHeight = math.max(
+                                  16.0,
+                                  _canvasHeight - s.position.dy,
+                                );
+                                targetWidth = math.min(
+                                  targetWidth,
+                                  availableWidth,
+                                );
+                                targetHeight = math.min(
+                                  targetHeight,
+                                  availableHeight,
+                                );
+                                s.width = targetWidth;
+                                s.height = targetHeight;
+                              } else {
+                                final bounds = _selectionBounds();
+                                if (bounds == null ||
+                                    bounds.width <= 0 ||
+                                    bounds.height <= 0) {
+                                  return;
+                                }
+                                final anchor = bounds.topLeft;
+                                final cur = bounds.bottomRight;
+                                final newBR = cur + details.delta / _zoom;
+                                final newW = (newBR.dx - anchor.dx).clamp(
+                                  24.0,
+                                  double.infinity,
+                                );
+                                final newH = (newBR.dy - anchor.dy).clamp(
+                                  24.0,
+                                  double.infinity,
+                                );
+                                final scaleX = newW / bounds.width;
+                                final scaleY = newH / bounds.height;
+                                final uniformScale = keepProportion
+                                    ? math.min(scaleX, scaleY)
+                                    : null;
+                                final sx = keepProportion
+                                    ? uniformScale!
+                                    : scaleX;
+                                final sy = keepProportion
+                                    ? uniformScale!
+                                    : scaleY;
+                                final center = bounds.center;
+                                for (final idx in _selected) {
+                                  final shp = _shapes[idx];
+                                  if (shp.locked) continue;
+                                  final rel = _shapeCenter(shp) - center;
+                                  final relScaled = Offset(
+                                    rel.dx * sx,
+                                    rel.dy * sy,
+                                  );
+                                  if (shp.asset == 'generated:text') {
+                                    final updatedFont =
+                                        ((shp.fontSize ?? 16) *
+                                                math.min(sx, sy))
+                                            .clamp(8.0, 240.0);
+                                    shp.fontSize = updatedFont;
+                                    _autoResizeTextShape(shp);
+                                  } else {
+                                    shp.width = (shp.width * sx).clamp(
+                                      16.0,
+                                      640.0,
+                                    );
+                                    shp.height = (shp.height * sy).clamp(
+                                      16.0,
+                                      640.0,
+                                    );
+                                  }
+                                  shp.position =
+                                      center +
+                                      relScaled -
+                                      Offset(shp.width / 2, shp.height / 2);
+                                }
                               }
-                            }
-                          });
-                        },
+                            });
+                          },
                           child: Container(
                             width: 32,
                             height: 32,
@@ -3625,7 +3641,8 @@ class _HomeScreenState extends State<HomeScreen> {
         reference = current;
         initialized = true;
       } else {
-        final matches = (reference == null && current == null) ||
+        final matches =
+            (reference == null && current == null) ||
             (reference != null &&
                 current != null &&
                 reference.value == current.value);
@@ -3924,7 +3941,9 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await _autoSaveCurrentSessionToHistory();
     } catch (error, stackTrace) {
-      debugPrint('Falha ao salvar histórico automaticamente: $error\n$stackTrace');
+      debugPrint(
+        'Falha ao salvar histórico automaticamente: $error\n$stackTrace',
+      );
       if (mounted) {
         showAppNotification(
           context,
@@ -4141,8 +4160,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (meta == null || !mounted) return;
     final trimmedTitle = meta.title.trim();
-    final resolvedTitle =
-        trimmedTitle.isEmpty ? defaultTitle : trimmedTitle;
+    final resolvedTitle = trimmedTitle.isEmpty ? defaultTitle : trimmedTitle;
     final trimmedNotes = meta.notes?.trim();
     final resolvedNotes = trimmedNotes?.isEmpty == true ? null : trimmedNotes;
 
@@ -4190,13 +4208,17 @@ class _HomeScreenState extends State<HomeScreen> {
     if (selection != null && mounted) {
       var targetCollectionId = selection.collectionId;
       if (selection.pendingName != null) {
-        final created =
-            await collectionProvider.createCollection(selection.pendingName!);
+        final created = await collectionProvider.createCollection(
+          selection.pendingName!,
+        );
         targetCollectionId = created.id;
       }
 
       if (targetCollectionId != null && mounted) {
-        await collectionProvider.addSession(targetCollectionId, updatedSnapshot);
+        await collectionProvider.addSession(
+          targetCollectionId,
+          updatedSnapshot,
+        );
         final targetName =
             collectionProvider.getById(targetCollectionId)?.name ?? 'Coleção';
         message = 'Sessão salva no histórico e adicionada em "$targetName".';
@@ -4226,7 +4248,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Image.memory(_lastPreviewBytes!, fit: BoxFit.contain),
               ),
             ),
-
 
             Positioned(
               right: 8,
@@ -4292,10 +4313,7 @@ class _HomeScreenState extends State<HomeScreen> {
       'createdAt': DateTime.now().toIso8601String(),
       'pan': {'x': _pan.dx, 'y': _pan.dy},
       'zoom': _zoom,
-      'canvas': {
-        'width': _canvasWidth,
-        'height': _canvasHeight,
-      },
+      'canvas': {'width': _canvasWidth, 'height': _canvasHeight},
       'canvasWidth': _canvasWidth,
       'canvasHeight': _canvasHeight,
       'shapes': [
@@ -4348,8 +4366,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _restoreFromSnapshot(CanvasSnapshot snapshot) {
     try {
       final data = jsonDecode(snapshot.stateJson) as Map<String, dynamic>;
-      final shapesData =
-          (data['shapes'] as List<dynamic>? ?? <dynamic>[]).map((raw) {
+      final shapesData = (data['shapes'] as List<dynamic>? ?? <dynamic>[]).map((
+        raw,
+      ) {
         return _shapeFromMap(raw as Map<String, dynamic>);
       }).toList();
       final canvasData = data['canvas'] as Map<String, dynamic>?;
@@ -4410,18 +4429,13 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       return points.isEmpty ? null : points;
     }
+
     return _PlacedShape(
       asset: asset,
-      position: Offset(
-        _toDouble(data['x']) ?? 0,
-        _toDouble(data['y']) ?? 0,
-      ),
-      width: _toDouble(data['width']) ??
-          _toDouble(data['size']) ??
-          _shapeSize,
-      height: _toDouble(data['height']) ??
-          _toDouble(data['size']) ??
-          _shapeSize,
+      position: Offset(_toDouble(data['x']) ?? 0, _toDouble(data['y']) ?? 0),
+      width: _toDouble(data['width']) ?? _toDouble(data['size']) ?? _shapeSize,
+      height:
+          _toDouble(data['height']) ?? _toDouble(data['size']) ?? _shapeSize,
       rotation: (data['rotation'] as num?)?.toDouble(),
       locked: data['locked'] as bool? ?? false,
       visible: data['visible'] as bool? ?? true,
@@ -4431,9 +4445,11 @@ class _HomeScreenState extends State<HomeScreen> {
       customName: data['customName'] as String?,
       strokeColor: _decodeColor(data['strokeColor']),
       fillColor: _decodeColor(data['fillColor']),
-      gridRows: (data['gridRows'] as num?)?.toInt() ??
+      gridRows:
+          (data['gridRows'] as num?)?.toInt() ??
           (asset == 'generated:grid' ? _defaultGridRows : null),
-      gridCols: (data['gridCols'] as num?)?.toInt() ??
+      gridCols:
+          (data['gridCols'] as num?)?.toInt() ??
           (asset == 'generated:grid' ? _defaultGridCols : null),
       gridCellSize: _toDouble(data['gridCellSize']),
       brushPoints: _decodeBrushPoints(data['brushPoints'] as List<dynamic>?),
@@ -5941,8 +5957,9 @@ class _ColorChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        selected ? AppTheme.colors.primary : Colors.grey.shade400;
+    final borderColor = selected
+        ? AppTheme.colors.primary
+        : Colors.grey.shade400;
     final backgroundColor = isNone ? Colors.transparent : color;
     final needsOutline = !isNone && color.computeLuminance() > 0.75;
 
@@ -5972,11 +5989,7 @@ class _ColorChip extends StatelessWidget {
               )
             : null,
         child: isNone
-            ? Icon(
-                Icons.block,
-                size: 16,
-                color: Colors.grey.shade600,
-              )
+            ? Icon(Icons.block, size: 16, color: Colors.grey.shade600)
             : null,
       ),
     );

@@ -11,6 +11,7 @@
         "dio",
         "file_saver",
         "flutter",
+        "flutter_dotenv",
         "flutter_svg",
         "form_validator",
         "go_router",
@@ -702,6 +703,13 @@
       "name": "platform",
       "version": "3.1.6",
       "dependencies": []
+    },
+    {
+      "name": "flutter_dotenv",
+      "version": "5.2.1",
+      "dependencies": [
+        "flutter"
+      ]
     }
   ],
   "configVersion": 1

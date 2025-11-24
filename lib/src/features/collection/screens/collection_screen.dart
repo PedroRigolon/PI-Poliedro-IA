@@ -35,36 +35,49 @@ class _CollectionScreenState extends State<CollectionScreen> {
     final provider = context.watch<CollectionProvider>();
     final collections = _applyFilters(provider.collections);
 
-    return Scaffold(
-      backgroundColor: AppTheme.colors.background,
-      appBar: const AppNavbar(),
-      body: Padding(
-        padding: EdgeInsets.all(AppTheme.spacing.large),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(provider.collections.length),
-            const SizedBox(height: 24),
-            _buildToolbar(),
-            const SizedBox(height: 20),
-            Expanded(
-              child: provider.isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : collections.isEmpty
-                      ? _EmptyCollections(onCreate: _createCollection)
-                      : _CollectionGrid(
-                          collections: collections,
-                          onAddSession: _addSessionFromHistory,
-                          onRenameCollection: _renameCollection,
-                          onDeleteCollection: _deleteCollection,
-                          onOpenSession: _openSnapshot,
-                          onRemoveSession: _removeSessionFromCollection,
-                          onRenameSession: _renameCollectionSession,
-                        ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 768;
+        final horizontalPadding = isCompact ? 16.0 : AppTheme.spacing.large;
+        final verticalPadding = isCompact ? 16.0 : AppTheme.spacing.large;
+
+        return Scaffold(
+          backgroundColor: AppTheme.colors.background,
+          appBar: const AppNavbar(),
+          body: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontalPadding,
+                vertical: verticalPadding,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(provider.collections.length),
+                  SizedBox(height: isCompact ? 16 : 24),
+                  _buildToolbar(isCompact),
+                  SizedBox(height: isCompact ? 16 : 20),
+                  Expanded(
+                    child: provider.isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : collections.isEmpty
+                        ? _EmptyCollections(onCreate: _createCollection)
+                        : _CollectionGrid(
+                            collections: collections,
+                            onAddSession: _addSessionFromHistory,
+                            onRenameCollection: _renameCollection,
+                            onDeleteCollection: _deleteCollection,
+                            onOpenSession: _openSnapshot,
+                            onRemoveSession: _removeSessionFromCollection,
+                            onRenameSession: _renameCollectionSession,
+                          ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -84,24 +97,36 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
   }
 
-  Widget _buildToolbar() {
+  Widget _buildToolbar(bool isCompact) {
+    final searchField = TextField(
+      onChanged: (value) => setState(() => _searchQuery = value),
+      decoration: InputDecoration(
+        hintText: 'Buscar por nome da coleção',
+        prefixIcon: const Icon(Icons.search),
+      ),
+    );
+    final createButton = FilledButton.icon(
+      onPressed: _createCollection,
+      icon: const Icon(Icons.add),
+      label: const Text('Criar coleção'),
+    );
+
+    if (isCompact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          searchField,
+          const SizedBox(height: 12),
+          SizedBox(width: double.infinity, child: createButton),
+        ],
+      );
+    }
+
     return Row(
       children: [
-        Expanded(
-          child: TextField(
-            onChanged: (value) => setState(() => _searchQuery = value),
-            decoration: InputDecoration(
-              hintText: 'Buscar por nome da coleção',
-              prefixIcon: const Icon(Icons.search),
-            ),
-          ),
-        ),
+        Expanded(child: searchField),
         const SizedBox(width: 16),
-        FilledButton.icon(
-          onPressed: _createCollection,
-          icon: const Icon(Icons.add),
-          label: const Text('Criar coleção'),
-        ),
+        createButton,
       ],
     );
   }
@@ -123,15 +148,21 @@ class _CollectionScreenState extends State<CollectionScreen> {
   Future<void> _renameCollection(UserCollection collection) async {
     final name = await _promptCollectionName(initialValue: collection.name);
     if (name == null || !mounted) return;
-    await context.read<CollectionProvider>().renameCollection(collection.id, name);
+    await context.read<CollectionProvider>().renameCollection(
+      collection.id,
+      name,
+    );
   }
 
   Future<void> _deleteCollection(UserCollection collection) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Excluir coleção'),
-            content: Text('Remover "${collection.name}" e todas as sessões salvas nela?'),
+            content: Text(
+              'Remover "${collection.name}" e todas as sessões salvas nela?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
@@ -139,8 +170,9 @@ class _CollectionScreenState extends State<CollectionScreen> {
               ),
               ElevatedButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                style:
-                    ElevatedButton.styleFrom(backgroundColor: AppTheme.colors.primary),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.colors.primary,
+                ),
                 child: const Text('Excluir'),
               ),
             ],
@@ -164,10 +196,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
       return;
     }
 
-    final selected = await showModalBottomSheet<CanvasSnapshot>(
-      context: context,
-      builder: (ctx) => _HistoryPicker(items: historyProvider.items),
-    );
+    final selected = await _showHistoryPickerDialog(historyProvider.items);
 
     if (selected == null || !mounted) return;
 
@@ -176,6 +205,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
     if (!mounted) return;
     final updated = context.read<CollectionProvider>().getById(collectionId);
     if (!mounted) return;
+    setState(() {});
     showAppNotification(
       context,
       message: 'Sessão adicionada em "${updated?.name ?? 'Coleção'}".',
@@ -183,15 +213,44 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
   }
 
+  Future<CanvasSnapshot?> _showHistoryPickerDialog(
+    List<CanvasSnapshot> items,
+  ) async {
+    return showDialog<CanvasSnapshot>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final size = MediaQuery.of(ctx).size;
+        final isCompact = size.width < 640;
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 12 : 48,
+            vertical: isCompact ? 24 : 48,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: isCompact ? size.width : 560,
+              maxHeight: size.height * 0.85,
+            ),
+            child: _HistoryPicker(items: items),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _removeSessionFromCollection(
     String collectionId,
     CollectionEntry entry,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Remover sessão'),
-            content: const Text('Esta sessão deixará de fazer parte da coleção.'),
+            content: const Text(
+              'Esta sessão deixará de fazer parte da coleção.',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
@@ -199,8 +258,9 @@ class _CollectionScreenState extends State<CollectionScreen> {
               ),
               ElevatedButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                style:
-                    ElevatedButton.styleFrom(backgroundColor: AppTheme.colors.primary),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.colors.primary,
+                ),
                 child: const Text('Remover'),
               ),
             ],
@@ -208,7 +268,10 @@ class _CollectionScreenState extends State<CollectionScreen> {
         ) ??
         false;
     if (!confirmed || !mounted) return;
-    await context.read<CollectionProvider>().removeSession(collectionId, entry.id);
+    await context.read<CollectionProvider>().removeSession(
+      collectionId,
+      entry.id,
+    );
   }
 
   Future<void> _renameCollectionSession(
@@ -224,24 +287,24 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
     if (meta == null || !mounted) return;
     await context.read<CollectionProvider>().renameSession(
-          collectionId,
-          entry.id,
-          title: meta.title,
-          notes: meta.notes,
-        );
-        if (!mounted) return;
-        await context.read<HistoryProvider>().updateMetadata(
-          entry.snapshot.id,
-          title: meta.title,
-          notes: meta.notes,
-        );
-        if (!entry.snapshot.id.startsWith('history-') && mounted) {
+      collectionId,
+      entry.id,
+      title: meta.title,
+      notes: meta.notes,
+    );
+    if (!mounted) return;
+    await context.read<HistoryProvider>().updateMetadata(
+      entry.snapshot.id,
+      title: meta.title,
+      notes: meta.notes,
+    );
+    if (!entry.snapshot.id.startsWith('history-') && mounted) {
       await context.read<HistoryProvider>().updateMetadata(
         'history-${entry.snapshot.id}',
         title: meta.title,
         notes: meta.notes,
-          );
-        }
+      );
+    }
   }
 
   Future<void> _openSnapshot(CanvasSnapshot snapshot) async {
@@ -302,23 +365,26 @@ class _CollectionGrid extends StatelessWidget {
   final void Function(UserCollection collection) onRenameCollection;
   final void Function(UserCollection collection) onDeleteCollection;
   final void Function(CanvasSnapshot snapshot) onOpenSession;
-  final void Function(String collectionId, CollectionEntry entry) onRemoveSession;
-  final void Function(String collectionId, CollectionEntry entry) onRenameSession;
+  final void Function(String collectionId, CollectionEntry entry)
+  onRemoveSession;
+  final void Function(String collectionId, CollectionEntry entry)
+  onRenameSession;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final crossAxisCount = width >= 1200
-          ? 3
-          : width >= 820
+        final crossAxisCount = width >= 1280
+            ? 3
+            : width >= 840
             ? 2
             : 1;
-        final spacing = 16.0;
+        final spacing = width < 600 ? 12.0 : 16.0;
         final itemWidth = crossAxisCount == 1
             ? width
             : (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+        final boardIsCompact = itemWidth < 460;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 32),
@@ -334,8 +400,11 @@ class _CollectionGrid extends StatelessWidget {
                   onRename: () => onRenameCollection(collection),
                   onDelete: () => onDeleteCollection(collection),
                   onOpenSession: onOpenSession,
-                  onRemoveSession: (entry) => onRemoveSession(collection.id, entry),
-                  onRenameSession: (entry) => onRenameSession(collection.id, entry),
+                  onRemoveSession: (entry) =>
+                      onRemoveSession(collection.id, entry),
+                  onRenameSession: (entry) =>
+                      onRenameSession(collection.id, entry),
+                  isCompactLayout: boardIsCompact,
                 ),
               );
             }).toList(),
@@ -355,6 +424,7 @@ class _CollectionBoard extends StatelessWidget {
     required this.onOpenSession,
     required this.onRemoveSession,
     required this.onRenameSession,
+    this.isCompactLayout = false,
   });
 
   final UserCollection collection;
@@ -364,9 +434,12 @@ class _CollectionBoard extends StatelessWidget {
   final void Function(CanvasSnapshot snapshot) onOpenSession;
   final void Function(CollectionEntry entry) onRemoveSession;
   final void Function(CollectionEntry entry) onRenameSession;
+  final bool isCompactLayout;
 
   @override
   Widget build(BuildContext context) {
+    final listHeight = isCompactLayout ? 180.0 : 220.0;
+
     return Card(
       elevation: 0,
       color: Colors.transparent,
@@ -375,7 +448,7 @@ class _CollectionBoard extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFFFDF7FA),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey[200]! ),
+          border: Border.all(color: Colors.grey[200]!),
         ),
         padding: EdgeInsets.all(AppTheme.spacing.small + 4),
         child: Column(
@@ -390,37 +463,59 @@ class _CollectionBoard extends StatelessWidget {
                     children: [
                       Text(
                         collection.name,
-                        style: AppTheme.typography.subtitle.copyWith(fontSize: 20),
+                        style: AppTheme.typography.subtitle.copyWith(
+                          fontSize: 20,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         '${collection.sessions.length} sessão${collection.sessions.length == 1 ? '' : 's'}',
-                        style: AppTheme.typography.paragraph.copyWith(fontSize: 14),
+                        style: AppTheme.typography.paragraph.copyWith(
+                          fontSize: 14,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Renomear coleção',
-                  onPressed: onRename,
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Excluir coleção',
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
-                ),
+                if (!isCompactLayout) ...[
+                  IconButton(
+                    tooltip: 'Renomear coleção',
+                    onPressed: onRename,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Excluir coleção',
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ] else
+                  PopupMenuButton<int>(
+                    tooltip: 'Opções da coleção',
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 0, child: Text('Renomear')),
+                      PopupMenuItem(value: 1, child: Text('Excluir')),
+                    ],
+                    onSelected: (value) {
+                      if (value == 0) {
+                        onRename();
+                      } else {
+                        onDelete();
+                      }
+                    },
+                    icon: const Icon(Icons.more_vert),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 220,
+              height: listHeight,
               child: collection.sessions.isEmpty
                   ? Center(
                       child: Text(
                         'Nenhuma sessão ainda. Adicione uma do histórico.',
-                        style:
-                            AppTheme.typography.paragraph.copyWith(fontSize: 14),
+                        style: AppTheme.typography.paragraph.copyWith(
+                          fontSize: 14,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     )
@@ -435,17 +530,23 @@ class _CollectionBoard extends StatelessWidget {
                           onOpen: () => onOpenSession(entry.snapshot),
                           onRemove: () => onRemoveSession(entry),
                           onRename: () => onRenameSession(entry),
+                          compact: isCompactLayout,
                         );
                       },
                     ),
             ),
             const SizedBox(height: 12),
             Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: onAddSession,
-                icon: const Icon(Icons.add),
-                label: const Text('Adicionar sessão'),
+              alignment: isCompactLayout
+                  ? Alignment.center
+                  : Alignment.centerRight,
+              child: SizedBox(
+                width: isCompactLayout ? double.infinity : null,
+                child: FilledButton.icon(
+                  onPressed: onAddSession,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Adicionar sessão'),
+                ),
               ),
             ),
           ],
@@ -461,16 +562,105 @@ class _CollectionSessionCard extends StatelessWidget {
     required this.onOpen,
     required this.onRemove,
     required this.onRename,
+    this.compact = false,
   });
 
   final CollectionEntry entry;
   final VoidCallback onOpen;
   final VoidCallback onRemove;
   final VoidCallback onRename;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final snapshot = entry.snapshot;
+    final preview = ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: snapshot.previewBytes != null
+          ? Image.memory(
+              snapshot.previewBytes!,
+              width: 64,
+              height: 64,
+              fit: BoxFit.cover,
+            )
+          : Container(
+              width: 64,
+              height: 64,
+              color: Colors.grey[200],
+              alignment: Alignment.center,
+              child: const Icon(Icons.image_outlined),
+            ),
+    );
+    final meta = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          snapshot.resolvedTitle,
+          style: AppTheme.typography.subtitle.copyWith(fontSize: 16),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Adicionada em ${_formatDate(entry.addedAt)}',
+          style: AppTheme.typography.paragraph.copyWith(fontSize: 13),
+        ),
+      ],
+    );
+    List<Widget> buildActionButtons() => [
+      IconButton(
+        tooltip: 'Abrir no canvas',
+        onPressed: onOpen,
+        icon: const Icon(Icons.open_in_new),
+      ),
+      IconButton(
+        tooltip: 'Renomear sessão',
+        onPressed: onRename,
+        icon: const Icon(Icons.edit_outlined),
+      ),
+      IconButton(
+        tooltip: 'Remover da coleção',
+        onPressed: onRemove,
+        icon: const Icon(Icons.delete_outline),
+      ),
+    ];
+
+    if (compact) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.grey[50],
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                preview,
+                const SizedBox(width: 12),
+                Expanded(child: meta),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 4,
+                children: buildActionButtons()
+                    .map(
+                      (widget) =>
+                          SizedBox(width: 36, height: 36, child: widget),
+                    )
+                    .toList(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
@@ -480,57 +670,10 @@ class _CollectionSessionCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: snapshot.previewBytes != null
-                ? Image.memory(
-                    snapshot.previewBytes!,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                  )
-                : Container(
-                    width: 64,
-                    height: 64,
-                    color: Colors.grey[200],
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.image_outlined),
-                  ),
-          ),
+          preview,
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  snapshot.resolvedTitle,
-                  style: AppTheme.typography.subtitle.copyWith(fontSize: 16),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Adicionada em ${_formatDate(entry.addedAt)}',
-                  style: AppTheme.typography.paragraph.copyWith(fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: 'Abrir no canvas',
-            onPressed: onOpen,
-            icon: const Icon(Icons.open_in_new),
-          ),
-          IconButton(
-            tooltip: 'Renomear sessão',
-            onPressed: onRename,
-            icon: const Icon(Icons.edit_outlined),
-          ),
-          IconButton(
-            tooltip: 'Remover da coleção',
-            onPressed: onRemove,
-            icon: const Icon(Icons.delete_outline),
-          ),
+          Expanded(child: meta),
+          Row(mainAxisSize: MainAxisSize.min, children: buildActionButtons()),
         ],
       ),
     );
@@ -568,13 +711,31 @@ class _EmptyCollections extends StatelessWidget {
   }
 }
 
-class _HistoryPicker extends StatelessWidget {
+class _HistoryPicker extends StatefulWidget {
   const _HistoryPicker({required this.items});
 
   final List<CanvasSnapshot> items;
 
   @override
+  State<_HistoryPicker> createState() => _HistoryPickerState();
+}
+
+class _HistoryPickerState extends State<_HistoryPicker> {
+  String _query = '';
+
+  @override
   Widget build(BuildContext context) {
+    final filtered = _query.isEmpty
+        ? widget.items
+        : widget.items
+              .where(
+                (snapshot) => snapshot.resolvedTitle.toLowerCase().contains(
+                  _query.toLowerCase(),
+                ),
+              )
+              .toList();
+    final maxHeight = MediaQuery.of(context).size.height * 0.6;
+
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.all(AppTheme.spacing.medium),
@@ -583,32 +744,57 @@ class _HistoryPicker extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Escolha uma sessão', style: AppTheme.typography.subtitle),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 360,
-              child: ListView.separated(
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final snapshot = items[index];
-                  return ListTile(
-                    leading: snapshot.previewBytes != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(
-                              snapshot.previewBytes!,
-                              width: 48,
-                              height: 48,
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : const Icon(Icons.image_outlined),
-                    title: Text(snapshot.resolvedTitle),
-                    subtitle: Text(_formatDate(snapshot.createdAt)),
-                    onTap: () => Navigator.of(context).pop(snapshot),
-                  );
-                },
+            const SizedBox(height: 4),
+            Text(
+              'Selecione um item do histórico para anexar à coleção.',
+              style: AppTheme.typography.paragraph.copyWith(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Buscar por título',
               ),
+              onChanged: (value) => setState(() => _query = value.trim()),
+            ),
+            const SizedBox(height: 16),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Nenhuma sessão corresponde à busca.',
+                          style: AppTheme.typography.paragraph,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final snapshot = filtered[index];
+                        return ListTile(
+                          leading: snapshot.previewBytes != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.memory(
+                                    snapshot.previewBytes!,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : const Icon(Icons.image_outlined),
+                          title: Text(snapshot.resolvedTitle),
+                          subtitle: Text(_formatDate(snapshot.createdAt)),
+                          onTap: () => Navigator.of(context).pop(snapshot),
+                        );
+                      },
+                    ),
             ),
           ],
         ),

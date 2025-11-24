@@ -110,6 +110,12 @@
       "languageVersion": "3.8"
     },
     {
+      "name": "flutter_dotenv",
+      "rootUri": "file:///C:/Users/pedro/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_dotenv-5.2.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "flutter_lints",
       "rootUri": "file:///C:/Users/pedro/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_lints-5.0.0",
       "packageUri": "lib/",

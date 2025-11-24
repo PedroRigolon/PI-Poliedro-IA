@@ -4,6 +4,7 @@ import '../core/theme/app_theme.dart';
 import '../features/auth/providers/auth_provider.dart';
 
 enum _AccountMenuOption { settings, collection, history, logout }
+
 enum _QuickAction { editor, tutorial, commands }
 
 class AppNavbar extends StatelessWidget implements PreferredSizeWidget {
@@ -77,7 +78,11 @@ class AppNavbar extends StatelessWidget implements PreferredSizeWidget {
         child: GestureDetector(
           onTap: () {
             if (ModalRoute.of(context)?.settings.name == '/home') return;
-            Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/home',
+              (route) => false,
+            );
           },
           child: Image.asset('assets/images/logo.png', height: 40),
         ),
@@ -165,56 +170,147 @@ class AppNavbar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Future<void> _showTutorialDialog(BuildContext context) async {
-    const steps = [
+    final steps = [
       {
-        'title': 'Adicionar elementos',
+        'title': 'Prepare o canvas',
         'description':
-            'Escolha uma categoria de formas no painel lateral e arraste qualquer item para o canvas.',
+            'Defina dimensões, zoom e grade antes de adicionar elementos para evitar retrabalho.',
+        'icon': Icons.dashboard_customize,
+        'highlights': const [
+          'Use o botão Ajustar para enquadrar tudo.',
+          'Ative/desative a grade no menu lateral.',
+          'Segure espaço para panear rapidamente.',
+        ],
       },
       {
-        'title': 'Mover e alinhar',
+        'title': 'Adicione e edite formas',
         'description':
-            'Use o mouse para selecionar e o teclado para ajustar: setas movem 1px, Shift + setas movem 10px.',
+            'Arraste figuras do painel esquerdo ou use o chat IA para gerar diagramas completos.',
+        'icon': Icons.auto_fix_high,
+        'highlights': const [
+          'Clique duas vezes em textos para editar no lugar.',
+          'Use Ctrl + D para duplicar qualquer seleção.',
+          'Agrupe itens relacionados com Ctrl + G.',
+        ],
       },
       {
-        'title': 'Gerenciar camadas',
+        'title': 'Organize camadas',
         'description':
-            'Abra o painel Camadas para renomear, bloquear ou alternar a visibilidade de cada elemento.',
+            'O painel de camadas permite renomear, bloquear ou ocultar itens sem perder o foco.',
+        'icon': Icons.layers,
+        'highlights': const [
+          'Trave elementos importantes para evitar cliques acidentais.',
+          'Arraste grupos para reordenar a hierarquia.',
+        ],
       },
       {
-        'title': 'Salvar e exportar',
+        'title': 'Compartilhe e salve',
         'description':
-            'Clique em "Salvar imagem" para gerar o preview, adicionar ao histórico e baixar em PNG/SVG/PDF.',
+            'Gere um preview, envie para o histórico e exporte em PNG, SVG ou PDF em poucos cliques.',
+        'icon': Icons.ios_share,
+        'highlights': const [
+          'Adicione sessões em coleções temáticas.',
+          'Use a visualização em tela cheia para validar detalhes.',
+        ],
       },
+    ];
+
+    final quickTips = [
+      'Ctrl + Z para desfazer',
+      'Shift + Scroll = pan horizontal',
+      'Ctrl + Scroll = pan vertical',
+      'Alt + arraste = duplicação rápida',
+      'Clique com botão do meio para pan',
     ];
 
     await showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Tutorial rápido'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (int i = 0; i < steps.length; i++) ...[
-                  _TutorialStepTile(
-                    index: i + 1,
-                    title: steps[i]['title']!,
-                    description: steps[i]['description']!,
-                  ),
-                  if (i != steps.length - 1) const SizedBox(height: 12),
-                ],
-              ],
+        final size = MediaQuery.of(ctx).size;
+        final isCompact = size.width < 640;
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 16 : 64,
+            vertical: isCompact ? 24 : 48,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Domine o editor em minutos',
+                      style: AppTheme.typography.title.copyWith(fontSize: 22),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Siga a sequência abaixo para estruturar qualquer canvas com segurança.',
+                      style: AppTheme.typography.paragraph.copyWith(
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    for (int i = 0; i < steps.length; i++) ...[
+                      _TutorialStepTile(
+                        index: i + 1,
+                        title: steps[i]['title'] as String,
+                        description: steps[i]['description'] as String,
+                        icon: steps[i]['icon'] as IconData,
+                        highlights:
+                            (steps[i]['highlights'] as List<String>?) ??
+                            const [],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    const SizedBox(height: 12),
+                    Text(
+                      'Dicas rápidas',
+                      style: AppTheme.typography.subtitle.copyWith(
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: quickTips
+                          .map(
+                            (tip) => Chip(
+                              label: Text(tip),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.of(ctx).pop();
+                            _showCommandsDialog(context);
+                          },
+                          icon: const Icon(Icons.keyboard_outlined),
+                          label: const Text('Ver atalhos'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('Começar agora'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Entendi'),
-            ),
-          ],
         );
       },
     );
@@ -315,9 +411,8 @@ class AppNavbar extends StatelessWidget implements PreferredSizeWidget {
               child: ListView.separated(
                 itemCount: commands.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (_, index) => _CommandShortcutTile(
-                  entry: commands[index],
-                ),
+                itemBuilder: (_, index) =>
+                    _CommandShortcutTile(entry: commands[index]),
               ),
             ),
           ),
@@ -478,10 +573,7 @@ class _CommandShortcutTile extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         gradient: LinearGradient(
-          colors: [
-            accent.withOpacity(0.16),
-            accent.withOpacity(0.06),
-          ],
+          colors: [accent.withOpacity(0.16), accent.withOpacity(0.06)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -509,10 +601,8 @@ class _CommandShortcutTile extends StatelessWidget {
                   runSpacing: 6,
                   children: entry.keys
                       .map(
-                        (key) => _ShortcutKeyChip(
-                          label: key.trim(),
-                          accent: accent,
-                        ),
+                        (key) =>
+                            _ShortcutKeyChip(label: key.trim(), accent: accent),
                       )
                       .toList(),
                 ),
@@ -572,11 +662,15 @@ class _TutorialStepTile extends StatelessWidget {
     required this.index,
     required this.title,
     required this.description,
+    required this.icon,
+    this.highlights = const <String>[],
   });
 
   final int index;
   final String title;
   final String description;
+  final IconData icon;
+  final List<String> highlights;
 
   @override
   Widget build(BuildContext context) {
@@ -591,13 +685,7 @@ class _TutorialStepTile extends StatelessWidget {
             color: AppTheme.colors.primary.withOpacity(0.15),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Text(
-            '$index',
-            style: AppTheme.typography.subtitle.copyWith(
-              color: AppTheme.colors.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          child: Icon(icon, color: AppTheme.colors.primary, size: 18),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -605,7 +693,7 @@ class _TutorialStepTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
+                '$index. $title',
                 style: AppTheme.typography.subtitle.copyWith(fontSize: 15.5),
               ),
               const SizedBox(height: 4),
@@ -613,6 +701,33 @@ class _TutorialStepTile extends StatelessWidget {
                 description,
                 style: AppTheme.typography.paragraph.copyWith(fontSize: 13.5),
               ),
+              if (highlights.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: highlights
+                      .map(
+                        (tip) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('• '),
+                              Expanded(
+                                child: Text(
+                                  tip,
+                                  style: AppTheme.typography.paragraph.copyWith(
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
             ],
           ),
         ),
